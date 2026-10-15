@@ -145,6 +145,7 @@ export class Game {
     v.hover = this.unitAt(this.mouse.x, this.mouse.y, v)?.i ?? 0;
     this.view = v;
     for (const f of this.buf.takeFx()) { this.renderer.fx(f, v); this.hud.onFx(f, v); }
+    const t0 = performance.now();
     this.renderer.render(v, this.cam, dt);
     const corners = [[0, 0], [innerWidth, 0], [innerWidth, innerHeight], [0, innerHeight]].map(([x, y]) => this.renderer.screenToWorld(x, y, this.cam));
     this.hud.update(v, this.cam, corners, {
@@ -152,7 +153,37 @@ export class Game {
       targetingSlot: this.aim ? (this.aim.item ? 'i' : 'a') + this.aim.slot : '',
     });
     this.root.classList.toggle('targeting', !!this.aim);
+    this.perfSample(now, performance.now() - t0, v);
   };
+
+  // ---------------- Panel de rendimiento (F9) ----------------
+
+  private perfEl: HTMLElement | null = null;
+  private perf = { frames: 0, js: 0, since: performance.now(), bytes: 0, fps: 0, ms: 0, kbps: 0 };
+
+  private togglePerf() {
+    if (this.perfEl) { this.perfEl.remove(); this.perfEl = null; return; }
+    this.perfEl = document.createElement('div');
+    this.perfEl.className = 'perf';
+    this.root.append(this.perfEl);
+  }
+
+  private perfSample(now: number, jsMs: number, v: View) {
+    const p = this.perf;
+    p.frames++; p.js += jsMs;
+    if (now - p.since < 500) return;
+    const secs = (now - p.since) / 1000;
+    p.fps = p.frames / secs; p.ms = p.js / p.frames;
+    p.kbps = (this.net.bytesIn - p.bytes) / 1024 / secs;
+    p.bytes = this.net.bytesIn; p.frames = 0; p.js = 0; p.since = now;
+    if (!this.perfEl) return;
+    const extra = this.renderer.stats?.() ?? {};
+    this.perfEl.innerHTML = [
+      `${p.fps.toFixed(0)} FPS`, `${p.ms.toFixed(1)} ms de render`, `${p.kbps.toFixed(1)} KB/s de red`,
+      `${v.units.length} unidades · ${v.projs.length} proyectiles`,
+      ...Object.entries(extra).map(([k, n]) => `${n} ${k}`),
+    ].join('<br>');
+  }
 
   private moveCamera(dt: number, hero: VUnit | undefined) {
     if ((this.camLock || this.keys.has(' ') || this.keys.has('F1')) && hero) {
@@ -309,6 +340,7 @@ export class Game {
       if (key === 'Tab') { e.preventDefault(); this.hud.showBoard(true); return; }
       if (key === 'F2') { e.preventDefault(); this.setMode(this.mode === '2d' ? '3d' : '2d'); return; }
       if (key === 'F3') { e.preventDefault(); this.controlAll = !this.controlAll; return; }
+      if (key === 'F9') { e.preventDefault(); this.togglePerf(); return; }
       if (key === 'F1') e.preventDefault();
       if (e.repeat && key !== ' ') return;
       this.keys.add(key);

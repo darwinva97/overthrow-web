@@ -51,6 +51,8 @@ export interface Renderer {
   fx(f: Fx, v: View): void;
   /** Los árboles talados cambiaron (la cuadrícula ya está actualizada). */
   treesChanged?(changed: [number, number][]): void;
+  /** Estadísticas de dibujo del último frame (panel F9). */
+  stats?(): Record<string, number>;
   dispose(): void;
 }
 

@@ -39,6 +39,7 @@ export interface Zone {
   interval: number;
   acc: number;
   until: number;
+  ability?: string;
   onInterval(z: Zone): void;
 }
 
@@ -103,7 +104,7 @@ export class World {
   after(delay: number, fn: () => void) { this.timers.push({ at: this.time + delay, fn }); }
 
   addZone(z: Omit<Zone, 'id' | 'acc' | 'until'> & { duration: number }) {
-    const zone: Zone = { ...z, id: this.nextId++, acc: 0, until: this.time + z.duration };
+    const zone: Zone = { ...z, id: this.nextId++, acc: 0, until: this.time + z.duration, ability: this.casting ?? undefined };
     this.zones.push(zone);
     return zone;
   }
@@ -143,7 +144,9 @@ export class World {
   /** Noche forzada hasta este instante (Dark Ascension, Eclipse con Scepter…). */
   nightUntil = 0;
   isNight() { return this.time < this.nightUntil || Math.floor(this.time / DAY_LENGTH) % 2 === 1; }
-  emit(f: Fx) { this.fx.push(f); }
+  /** Habilidad cuyo onSpellStart se está ejecutando: etiqueta fx, proyectiles y zonas. */
+  private casting: string | null = null;
+  emit(f: Fx) { if (this.casting && !f.a) f.a = this.casting; this.fx.push(f); }
   error(u: Unit, msg: string) { if (u.playerId) this.errors.push({ playerId: u.playerId, msg }); }
 
   // ---------------- Altas y bajas ----------------
@@ -310,7 +313,7 @@ export class World {
 
   addProjectile(p: Partial<Projectile> & Pick<Projectile, 'kind' | 'fx' | 'source' | 'x' | 'y' | 'speed' | 'onHit'>) {
     const proj: Projectile = {
-      id: this.nextId++, target: null, dx: 0, dy: 0, left: 0, width: 0, widthEnd: 0,
+      id: this.nextId++, target: null, ability: this.casting ?? undefined, dx: 0, dy: 0, left: 0, width: 0, widthEnd: 0,
       travelled: 0, hit: new Set(), dodgeable: false, team: p.source.team, dead: false,
       ...p,
     };
@@ -451,7 +454,12 @@ export class World {
         if (m.onTargeted?.(m, u, a)) { this.afterCast(u, a); return; }
       }
     }
-    a.impl!.onSpellStart?.(a as any, t);
+    // Evento visual del lanzamiento: el cliente lo usa para la pose y el destello.
+    const def = a.def as any;
+    this.emit({ n: 'cast', x: t.x, y: t.y, u: u.id, u2: tu?.id, a: a.key, c: def.dmgType ?? undefined, t: u.team });
+    const prev = this.casting;
+    this.casting = a.key;
+    try { a.impl!.onSpellStart?.(a as any, t); } finally { this.casting = prev; }
     this.afterCast(u, a);
   }
 

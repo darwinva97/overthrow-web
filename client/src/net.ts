@@ -8,6 +8,8 @@ export class Net {
   private handlers = new Set<Handler>();
   private queue: ClientMsg[] = [];
   ping = 0;
+  /** Bytes recibidos (para el panel de rendimiento). */
+  bytesIn = 0;
   private closedByUser = false;
   onStatus: (s: 'open' | 'closed') => void = () => {};
 
@@ -24,6 +26,7 @@ export class Net {
       this.queue = [];
     };
     ws.onmessage = (e) => {
+      this.bytesIn += (e.data as string).length;
       const m = JSON.parse(e.data) as ServerMsg;
       if (m.t === 'pong') { this.ping = performance.now() - m.c; return; }
       if (m.t === 'welcome') saveSession(m.code, m.token);

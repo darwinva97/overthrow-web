@@ -299,3 +299,5 @@ img { display: block; }
 .attr-tabs .btn { padding: 5px 10px; font-size: 13px; }
 .attr-tabs .btn[aria-pressed='true'] { border-color: var(--gold); color: var(--gold-hi); }
 .heroes { max-height: calc(100vh - 220px); overflow: auto; padding-right: 4px; }
+
+.perf { position: absolute; left: 12px; top: 130px; z-index: 5; background: #000b; border: 1px solid #ffffff22; border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; pointer-events: none; }

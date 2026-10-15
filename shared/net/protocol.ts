@@ -69,10 +69,12 @@ export interface SUnit {
   r: number;
   /** Ilusión vista por su dueño (los enemigos no la distinguen). */
   il?: 1;
+  /** Habilidad o item que está lanzando o canalizando. */
+  ck?: string;
 }
 
-export interface SProj { i: number; fx: string; x: number; y: number; s: number; tu?: number }
-export interface SZone { i: number; fx: string; x: number; y: number; r: number; t: number; e: number }
+export interface SProj { i: number; fx: string; x: number; y: number; s: number; tu?: number; a?: string }
+export interface SZone { i: number; fx: string; x: number; y: number; r: number; t: number; e: number; a?: string }
 export interface SOrb { i: number; r: string; p: [number, number][]; landed: boolean }
 
 export interface SAbility {

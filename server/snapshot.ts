@@ -25,7 +25,7 @@ function encodeUnit(w: World, u: Unit, viewer: Unit | null, team: number): SUnit
   if (fx.length) s.fx = fx;
   if (viewer && u.playerId && u.playerId === viewer.playerId) s.o = 1;
   if (u.atk.phase === 1) s.a = 1;
-  if (u.cast) s.c = u.cast.phase;
+  if (u.cast) { s.c = u.cast.phase; s.ck = u.cast.a.key; }
   if (u.team === team) s.v = Math.round(u.s.vision);
   if (u.kind === 'illusion' && u.team === team) s.il = 1;
   void w;
@@ -108,10 +108,10 @@ export function buildSnapshot(w: World, rules: OverthrowRules, team: number, her
     night: w.isNight(),
     u: units,
     p: w.projectiles.filter((p) => p.team === team || w.pointVisible(team, p.x, p.y)).map((p) => ({
-      i: p.id, fx: p.fx, x: Math.round(p.x), y: Math.round(p.y), s: p.source.id, tu: p.target?.id,
+      i: p.id, fx: p.fx, x: Math.round(p.x), y: Math.round(p.y), s: p.source.id, tu: p.target?.id, a: p.ability,
     })),
     z: w.zones.filter((z) => z.team === team || w.pointVisible(team, z.x, z.y)).map((z) => ({
-      i: z.id, fx: z.fx, x: Math.round(z.x), y: Math.round(z.y), r: z.r, t: z.team, e: r1(z.until - w.time),
+      i: z.id, fx: z.fx, x: Math.round(z.x), y: Math.round(z.y), r: z.r, t: z.team, e: r1(z.until - w.time), a: z.ability,
     })),
     fx: fx.filter((f) => fxVisible(w, f, team)),
     orbs: rules.orbs.filter((o) => shown.has(o.unit.id)).map((o) => ({

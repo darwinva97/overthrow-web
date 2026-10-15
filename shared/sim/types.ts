@@ -318,10 +318,14 @@ export interface Fx {
   c?: string;
   /** Equipo que lo provoca, para colorear. */
   t?: number;
+  /** Habilidad o item que lo provoca (lo rellena el mundo si se emite durante un lanzamiento). */
+  a?: string;
 }
 
 export interface Projectile {
   id: number;
+  /** Habilidad o item que lo lanzó (para elegir su aspecto). */
+  ability?: string;
   kind: 'track' | 'linear';
   /** Visual: 'attack', 'dragon_slave', 'hook', 'lance', 'assassinate'… */
   fx: string;
