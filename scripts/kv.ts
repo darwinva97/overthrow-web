@@ -20,7 +20,9 @@ export function parseKV(src: string): KV {
     if (c === '"') {
       i++;
       let s = '';
-      while (i < n && src[i] !== '"') { if (src[i] === '\\' && i + 1 < n) { s += src[i + 1]; i += 2; } else s += src[i++]; }
+      while (i < n && src[i] !== '"') {
+        if (src[i] === '\\' && i + 1 < n) { const e = src[i + 1]; s += e === 'n' ? '\n' : e === 't' ? '\t' : e; i += 2; } else s += src[i++];
+      }
       i++;
       return s;
     }

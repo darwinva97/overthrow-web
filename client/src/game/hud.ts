@@ -3,6 +3,7 @@
 import { ABILITIES, HEROES, ITEMS, abilityIcon, heroIcon, heroPortrait, itemIcon, lv, type ItemData } from '../../../shared/data';
 import type { BoardRow, SAbility, SItem, SMe } from '../../../shared/net/protocol';
 import meta from '../../../shared/data/meta.json';
+import { abilityName, abilityTooltip, itemName, itemTooltip, valueLabel } from './loc';
 
 const SHOP = new Set(meta.shop);
 const isShopItem = (k: string) => SHOP.has(k);
@@ -468,11 +469,22 @@ export class Hud {
     const opts = h('div', 'opts');
     me.orb.options.forEach((o, i) => {
       const b = h('button', `orb-opt rarity-${me.orb!.rarity}`);
-      b.innerHTML = `<img src="${iconFor(o.icon)}" alt=""><b>${esc(o.label)}</b><kbd>Alt + ${i + 1}</kbd>`;
+      b.innerHTML = `<img src="${iconFor(o.icon)}" alt=""><b>${esc(this.orbLabel(o, me))}</b><kbd>Alt + ${i + 1}</kbd>`;
       b.onclick = () => this.act.pickOrb(i);
       opts.append(b);
     });
     this.orbsEl.append(opts);
+  }
+
+  /** Mejora de orbe con el nombre oficial de la habilidad y de su valor. */
+  private orbLabel(o: { id: string; label: string }, me: SMe): string {
+    const m = /^v:(\d+):([^:]+):/.exec(o.id);
+    const ab = m ? me.ab[+m[1]] : undefined;
+    if (!m || !ab) return o.label;
+    const amount = /[+−-]?\d+(\.\d+)?%?/.exec(o.label.split(':').slice(1).join(':'))?.[0] ?? '';
+    const key = m[2];
+    const what = key === '_cd' ? 'tiempo de recarga' : key === '_mc' ? 'coste de maná' : (valueLabel(ab.k, key) ?? key.replaceAll('_', ' ')).toLowerCase();
+    return `${abilityName(ab.k)}: ${amount} ${what}`;
   }
 
   private updateTalents(me: SMe) {
@@ -487,7 +499,7 @@ export class Hud {
       const [a, b] = row.options;
       const opt = (o: typeof a | undefined) => {
         const btn = h('button', 'topt' + (o?.picked ? ' picked' : '')) as HTMLButtonElement;
-        btn.textContent = o?.name ?? '';
+        btn.textContent = o ? (abilityName(o.key) !== o.key ? abilityName(o.key) : o.name) : '';
         btn.disabled = !row.can || !o;
         if (o) btn.onclick = () => this.act.pickTalent(o.key);
         return btn;
@@ -530,7 +542,7 @@ export class Hud {
       keys.forEach((k, i) => {
         const b = h('button', 'orb-opt' + (this.neutralChoice[which] === i ? ' chosen' : ''));
         const d = ITEMS[k];
-        b.innerHTML = `<img src="${itemIcon(k)}" alt=""><b>${esc(d?.name ?? k)}</b>`;
+        b.innerHTML = `<img src="${itemIcon(k)}" alt=""><b>${esc(itemName(k))}</b>`;
         b.onclick = () => { this.neutralChoice[which] = i; this.lastNeutral = ''; };
         b.onmouseenter = () => this.showItemTip(b, k, -1);
         b.onmouseleave = () => this.hideTip();
@@ -552,7 +564,7 @@ export class Hud {
     this.lastShop = sig;
     const all = shopItems().filter((d) => !d.key.startsWith('dagon_'));
     const pick = (d: ItemData) => {
-      if (this.shopTab === 'search') return d.name.toLowerCase().includes(q) || d.key.includes(q);
+      if (this.shopTab === 'search') return d.name.toLowerCase().includes(q) || itemName(d.key).toLowerCase().includes(q) || d.key.includes(q);
       if (this.shopTab === 'consumable') return d.qual === 'consumable';
       if (this.shopTab === 'basic') return d.qual !== 'consumable' && !d.components.length;
       return d.components.length > 0;
@@ -624,15 +636,8 @@ export class Hud {
   }
 
   private showAbilityTip(el: HTMLElement, a: SAbility) {
-    const d = ABILITIES[a.k];
-    if (!d) return;
-    const lvl = Math.max(1, a.l);
-    const skip = /castpoint|castrange|tooltip|^max_|scepter|shard|^zero|visualz|zchange|^does_|^require|^no_|^dispel|^attack_factor$/;
-    const vals = Object.entries(d.values).filter(([k, arr]) => !skip.test(k) && arr.some((x) => x !== 0)).slice(0, 8)
-      .map(([k, arr]) => `<span class="k">${esc(k.replaceAll('_', ' '))}:</span> ${arr.length > 1 ? arr.map((x, i) => (i === lvl - 1 ? `<b>${x}</b>` : x)).join(' / ') : arr[0]}`).join('\n');
-    const cd = d.cd.length ? `Enfriamiento: ${d.cd.join(' / ')}` : '';
-    const mc = d.mc.length ? `Maná: ${d.mc.join(' / ')}` : '';
-    this.tip.innerHTML = `<h4>${esc(d.name)}${a.ult ? ' (definitiva)' : a.innate ? ' (innata)' : ''}</h4>${esc(d.desc)}\n\n${vals}\n${[cd, mc].filter(Boolean).join('   ')}${a.rng ? `\nAlcance: ${a.rng}` : ''}`;
+    this.tip.innerHTML = abilityTooltip(a.k, a.l, { ult: a.ult, innate: a.innate, range: a.rng });
+    if (!this.tip.innerHTML) return;
     this.place(el);
   }
 
@@ -640,10 +645,8 @@ export class Hud {
     if (!key) return;
     const d = ITEMS[key];
     if (!d) return;
-    const comps = d.components.length ? `\nReceta: ${d.components.map((c) => ITEMS[c]?.name ?? c).join(' + ')}${d.recipeCost ? ` + receta (${d.recipeCost})` : ''}` : '';
-    const stats = Object.entries(d.values).filter(([k]) => k.startsWith('bonus_')).slice(0, 6).map(([k, v]) => `+${lv(v, 1)} ${STAT_ES[k] ?? k.slice(6).replaceAll('_', ' ')}`).join('\n');
-    const pending = !isShopItem(key) ? '\n(Su efecto aún no está disponible en esta versión)' : '';
-    this.tip.innerHTML = `<h4>${esc(d.name)}</h4><span class="cost">${cost ?? d.cost} oro</span>${comps}\n${esc(stats)}\n${esc(d.desc)}${pending}${slot >= 0 ? '\n\nArrastra para mover. Clic derecho en la base: vender.' : ''}`;
+    const recipe = d.components.length ? `Receta: ${d.components.map((c) => itemName(c)).join(' + ')}${d.recipeCost ? ` + receta (${d.recipeCost})` : ''}` : '';
+    this.tip.innerHTML = itemTooltip(key, cost ?? d.cost, recipe, !isShopItem(key) && !d.tier, slot >= 0);
     this.place(el);
   }
 

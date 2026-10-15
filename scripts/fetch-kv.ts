@@ -26,3 +26,12 @@ await Promise.all(list.filter((x) => x.name.endsWith('.txt')).map(async (x) => {
   n++;
 }));
 console.log('héroes', n);
+
+// Textos oficiales en español (latinoamericano y de España).
+mkdirSync(join(root, 'data-src/loc'), { recursive: true });
+const LOC = 'https://raw.githubusercontent.com/dotabuff/d2vpkr/master/dota/resource/localization';
+for (const f of ['abilities_latam', 'dota_latam', 'abilities_spanish', 'dota_spanish']) {
+  const r = await fetch(`${LOC}/${f}.txt`);
+  if (r.ok) writeFileSync(join(root, 'data-src/loc', `${f}.txt`), await r.text());
+}
+console.log('textos ok');

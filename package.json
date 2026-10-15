@@ -6,7 +6,7 @@
     "client"
   ],
   "scripts": {
-    "gen-data": "tsx scripts/gen-data.ts && tsx scripts/gen-hero-index.ts && tsx scripts/gen-client-meta.ts",
+    "gen-data": "tsx scripts/gen-data.ts && tsx scripts/gen-hero-index.ts && tsx scripts/gen-loc.ts && tsx scripts/gen-client-meta.ts",
     "server": "tsx server/main.ts",
     "dev:client": "npm --workspace client run dev",
     "build": "tsx scripts/gen-client-meta.ts && npm --workspace client run build",

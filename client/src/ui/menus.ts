@@ -1,5 +1,8 @@
 // Pantalla de inicio y sala de espera.
-import { HEROES, heroPortrait } from '../../../shared/data';
+import { ABILITIES, HEROES, abilityIcon, heroPortrait } from '../../../shared/data';
+import { abilityName, abilityTooltip, heroHype, heroName, locReady } from '../game/loc';
+
+let locLoaded = false;
 import meta from '../../../shared/data/meta.json';
 import { MAPS } from '../../../shared/maps';
 import type { LobbyState } from '../../../shared/net/protocol';
@@ -79,6 +82,53 @@ export interface LobbyActions {
 
 const heroFilter = { attr: '', q: '' };
 
+const ATTR_ES: Record<string, string> = { str: 'Fuerza', agi: 'Agilidad', int: 'Inteligencia', all: 'Universal' };
+const ROLE_ES: Record<string, string> = { Carry: 'Carry', Support: 'Soporte', Nuker: 'Nuker', Disabler: 'Incapacitador', Jungler: 'Jungla',
+  Durable: 'Resistente', Escape: 'Escurridizo', Pusher: 'Empujador', Initiator: 'Iniciador' };
+
+/** Ficha del héroe elegido: descripción oficial, estadísticas a nivel 1 y habilidades. */
+function heroInfo(k: string): string {
+  const h = HEROES[k];
+  if (!h) return '';
+  const agiArmor = h.armor + h.agi / 6;
+  const primary = h.attr === 'all' ? (h.str + h.agi + h.int) * 0.45 : h.attr === 'str' ? h.str : h.attr === 'agi' ? h.agi : h.int;
+  const hp = Math.round(h.hp + h.str * 22), mana = Math.round(h.mana + h.int * 12);
+  const abil = h.abilities.filter((a) => ABILITIES[a] && !ABILITIES[a].behavior.includes('hidden') && !ABILITIES[a].behavior.includes('not_learnable') || ABILITIES[a]?.innate);
+  const stat = (label: string, v: string) => `<div><span>${label}</span><b>${v}</b></div>`;
+  return `<div class="hero-info">
+    <img class="hero-big" src="${heroPortrait(k)}" alt="">
+    <div class="hero-main">
+      <h3>${esc(heroName(k, h.name))}</h3>
+      <div class="hint">${ATTR_ES[h.attr]} · ${h.melee ? 'Cuerpo a cuerpo' : 'A distancia'} · ${h.roles.map((r) => ROLE_ES[r] ?? r).join(', ')}</div>
+      <p class="hype">${heroHype(k)}</p>
+      <div class="hero-abil">${abil.map((a) => `<img src="${abilityIcon(a)}" alt="${esc(abilityName(a))}" data-abil="${a}" onerror="this.style.visibility='hidden'">`).join('')}</div>
+    </div>
+    <div class="hero-stats">
+      ${stat('Fuerza', `${h.str} +${h.strGain}`)}${stat('Agilidad', `${h.agi} +${h.agiGain}`)}${stat('Inteligencia', `${h.int} +${h.intGain}`)}
+      ${stat('Vida', String(hp))}${stat('Maná', String(mana))}${stat('Daño', `${Math.round(h.dmgMin + primary)}–${Math.round(h.dmgMax + primary)}`)}
+      ${stat('Armadura', agiArmor.toFixed(1))}${stat('Velocidad', String(h.ms))}${stat('Alcance', String(h.range))}
+      ${stat('Tiempo base de ataque', h.bat.toFixed(1))}${stat('Visión', `${h.dayVision} / ${h.nightVision}`)}${stat('Giro', String(h.turnRate))}
+    </div>
+  </div>`;
+}
+
+let lobbyTip: HTMLElement | null = null;
+function bindAbilityTips(root: HTMLElement) {
+  if (!lobbyTip) { lobbyTip = document.createElement('div'); lobbyTip.className = 'tip'; document.body.append(lobbyTip); }
+  const tip = lobbyTip;
+  root.querySelectorAll<HTMLImageElement>('[data-abil]').forEach((im) => {
+    im.onmouseenter = () => {
+      const k = im.dataset.abil!;
+      tip.innerHTML = abilityTooltip(k, 1, { ult: ABILITIES[k]?.ult, innate: ABILITIES[k]?.innate });
+      tip.style.display = 'block';
+      const r = im.getBoundingClientRect();
+      tip.style.left = `${Math.max(8, Math.min(innerWidth - tip.offsetWidth - 8, r.left))}px`;
+      tip.style.top = `${Math.max(8, r.top - tip.offsetHeight - 10)}px`;
+    };
+    im.onmouseleave = () => { tip.style.display = 'none'; };
+  });
+}
+
 export function renderLobby(root: HTMLElement, l: LobbyState, me: string, act: LobbyActions) {
   const mine = l.players.find((p) => p.id === me);
   const host = l.host === me;
@@ -110,10 +160,11 @@ export function renderLobby(root: HTMLElement, l: LobbyState, me: string, act: L
         (!heroFilter.q || HEROES[k].name.toLowerCase().includes(heroFilter.q.toLowerCase()))).map((k) => {
         const h = HEROES[k];
         return `<button class="hero-card" data-hero="${k}" aria-pressed="${mine?.hero === k}"><img src="${heroPortrait(k)}" alt="" loading="lazy">
-          <span class="hn">${esc(h.name)}<i class="attr" style="background:${ATTR_COLOR[h.attr]}"></i></span>
+          <span class="hn">${esc(heroName(k, h.name))}<i class="attr" style="background:${ATTR_COLOR[h.attr]}"></i></span>
           ${taken.has(k) ? `<span class="taken">${esc(taken.get(k)!)}</span>` : ''}</button>`;
       }).join('')}</div>
       <p class="hint" style="margin-top:12px">${heroes.length} de los 127 héroes de Dota disponibles.</p>
+      ${mine?.hero ? heroInfo(mine.hero) : '<p class="hint">Elige un héroe para ver sus habilidades y estadísticas.</p>'}
     </section>
     <aside class="panel">
       <div class="field"><label for="map">Modo</label>
@@ -125,6 +176,9 @@ export function renderLobby(root: HTMLElement, l: LobbyState, me: string, act: L
     </aside>
   </div></div>`;
   root.querySelectorAll<HTMLButtonElement>('[data-hero]').forEach((b) => b.onclick = () => { localStorage.setItem('overthrow.hero', b.dataset.hero!); act.pick(b.dataset.hero!); });
+  bindAbilityTips(root);
+  // Cuando lleguen los textos en español, se vuelve a pintar con ellos.
+  if (!locLoaded) void locReady.then(() => { locLoaded = true; renderLobby(root, l, me, act); });
   root.querySelectorAll<HTMLButtonElement>('[data-team]').forEach((b) => b.onclick = () => act.team(+b.dataset.team!));
   root.querySelectorAll<HTMLButtonElement>('[data-attr]').forEach((b) => b.onclick = () => { heroFilter.attr = b.dataset.attr!; renderLobby(root, l, me, act); });
   const hs = root.querySelector('#hsearch') as HTMLInputElement;
