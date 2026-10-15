@@ -1,0 +1,29 @@
+{
+  "name": "overthrow-web",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client"
+  ],
+  "scripts": {
+    "gen-data": "tsx scripts/gen-data.ts && tsx scripts/gen-hero-index.ts",
+    "server": "tsx server/main.ts",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace client run build",
+    "test": "vitest run",
+    "sim:bots": "tsx scripts/sim-bots.ts",
+    "fetch-kv": "tsx scripts/fetch-kv.ts"
+  },
+  "dependencies": {
+    "dotaconstants": "^10.8.0",
+    "three": "^0.186.1",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
