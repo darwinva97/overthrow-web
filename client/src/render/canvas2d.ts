@@ -54,6 +54,7 @@ export class Canvas2DRenderer implements Renderer {
 
   fx(f: Fx, v: View) {
     this.overlay.fx(f, v);
+    this.units.onFx(f, v);
     this.effects.fx(f, v);
   }
 

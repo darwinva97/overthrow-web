@@ -1,7 +1,7 @@
 // Cuerpo de las unidades en el modo 2D (fichas con retrato, creeps, estructuras).
 // Los estados encima de la unidad, proyectiles y poderes los pinta canvas/effects.ts.
 import { heroIcon } from '../../../../shared/data';
-import { ST } from '../../../../shared/sim/types';
+import { ST, type Fx } from '../../../../shared/sim/types';
 import type { VUnit } from '../../game/state';
 import { ORB_COLOR } from '../fxstyle';
 import { img, ready } from '../images';
@@ -16,6 +16,9 @@ export interface Drawn { x: number; y: number; r: number }
 
 export class UnitPainter {
   private clock = 0;
+
+  /** Eventos del servidor que afectan a la animación (muerte, golpe, lanzamiento…). */
+  onFx(_f: Fx, _v: View) {}
 
   /** Dibuja la unidad; devuelve su posición dibujada o null si no se dibuja. */
   draw(c: CanvasRenderingContext2D, v: View, u: VUnit, px: number, clock: number): Drawn | null {

@@ -2,7 +2,7 @@
 // Los estados visuales (aturdido, escudos, auras…) los dibuja la capa de efectos.
 import * as THREE from 'three';
 import { HEROES, heroIcon } from '../../../../shared/data';
-import { ST } from '../../../../shared/sim/types';
+import { ST, type Fx } from '../../../../shared/sim/types';
 import type { VUnit } from '../../game/state';
 import { ATTR_COLOR, ORB_COLOR } from '../fxstyle';
 import { img } from '../images';
@@ -30,6 +30,9 @@ export class UnitLayer {
 
   /** Objeto 3D de una unidad (raíz en el suelo); la capa de efectos le cuelga cosas. */
   get(id: number): UnitObj | undefined { return this.units.get(id); }
+
+  /** Eventos del servidor que afectan a la animación (muerte, golpe, lanzamiento…). */
+  onFx(_f: Fx, _v: View) {}
 
   /** Altura de la cabeza en unidades de mundo, para barras y estados. */
   headHeight(u: VUnit): number { return u.k === 'hero' || u.k === 'illusion' ? 180 : u.k === 'creep' || u.k === 'summon' ? 120 : 100; }

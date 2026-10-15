@@ -293,6 +293,7 @@ export class Three3DRenderer implements Renderer {
 
   fx(f: Fx, v: View) {
     this.overlay.fx(f, v);
+    this.unitLayer.onFx(f, v);
     this.effects.fx(f, v);
   }
 
