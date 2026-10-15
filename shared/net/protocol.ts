@@ -75,7 +75,7 @@ export interface SUnit {
   ck?: string;
 }
 
-export interface SProj { i: number; fx: string; x: number; y: number; s: number; tu?: number; a?: string }
+export interface SProj { i: number; fx: string; x: number; y: number; s: number; tu?: number; a?: string; /** Ancho de los lineales. */ w?: number }
 export interface SZone { i: number; fx: string; x: number; y: number; r: number; t: number; e: number; a?: string }
 export interface SOrb { i: number; r: string; p: [number, number][]; landed: boolean }
 

@@ -57,7 +57,11 @@ export class SnapBuffer {
   takeFx(): Fx[] {
     const t = this.renderTime();
     const out: Fx[] = [];
-    while (this.fxQueue.length && this.fxQueue[0].tm <= t + 0.02) out.push(this.fxQueue.shift()!.fx);
+    // Tras un tirón no se reproducen efectos de hace más de un segundo.
+    while (this.fxQueue.length && this.fxQueue[0].tm <= t + 0.02) {
+      const q = this.fxQueue.shift()!;
+      if (q.tm >= t - 1) out.push(q.fx);
+    }
     if (this.fxQueue.length > 400) this.fxQueue.splice(0, this.fxQueue.length - 400);
     return out;
   }

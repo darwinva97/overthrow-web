@@ -7,7 +7,7 @@ import { ORB_COLOR } from '../fxstyle';
 import type { View } from '../types';
 import { SH } from './atlas';
 import {
-  castLook, fxStyle, hexRgb, lighten, projStyle, statusStyle, zoneStyle,
+  castLook, FX, fxStyle, hexRgb, lighten, projStyle, statusStyle, zoneStyle,
   type FxDef, type ProjDef, type Resolved, type StatusDef, type ZoneDef,
 } from './catalog';
 import { brush, DECAL, Frame, ParticlePool, type Brush } from './frame';
@@ -70,11 +70,20 @@ export class VfxEngine {
   private zoneBorn = new Map<number, number>();
   private clock = 0;
   private frameNo = 0;
+  /** Eventos recibidos desde el último frame. */
+  private burstCount = 0;
   private dens = 1;
   private opts: EngineOpts;
   private b: Bounds | null = null;
   /** Estadísticas del último frame. */
   readonly info = { live: 0, particles: 0, sprites: 0, decals: 0, beams: 0, shells: 0, tLive: 0, tUnits: 0, tProj: 0, tSim: 0 };
+
+  /** Calidad 0-2: escala la densidad de partículas respecto a la de partida. */
+  setQuality(q: 0 | 1 | 2) {
+    this.baseDensity ??= this.opts.density;
+    this.opts.density = this.baseDensity * [0.35, 0.65, 1][q];
+  }
+  private baseDensity: number | undefined;
 
   constructor(opts: EngineOpts) {
     this.opts = opts;
@@ -135,12 +144,15 @@ export class VfxEngine {
   private push(s: Resolved<FxDef>, def: FxDef, kit: Kit, f: Fx, d: number) {
     // Tope de efectos vivos: con el frame atascado se acumulan; primero se descartan los menores.
     const n = this.live.length;
+    // Tras un tirón llegan de golpe cientos de eventos atrasados: se quedan los importantes.
+    this.burstCount++;
+    if (this.burstCount > 160 || (this.burstCount > 70 && MINOR.has(def.k))) return;
     if (n >= MAX_LIVE || (n >= MAX_LIVE / 2 && MINOR.has(def.k) && (f.r ?? 0) < 200)) return;
     // Mismo efecto sobre la misma unidad recién lanzado (golpes, destellos del trono, chispas de Io): se descarta.
     if (f.u && MINOR.has(def.k)) {
       for (let i = n - 1; i >= Math.max(0, n - 80); i--) {
         const o = this.live[i];
-        if (o.f.u === f.u && o.f.n === f.n && o.t < Math.min(0.25, o.d * 0.5)) return;
+        if (o.f.u === f.u && o.f.n === f.n && o.t < Math.min(0.25, o.d * 0.5) && Math.abs(o.f.x - f.x) + Math.abs(o.f.y - f.y) < 40) return;
       }
     }
     const l = this.spare.pop() ?? ({} as Live);
@@ -151,6 +163,16 @@ export class VfxEngine {
   /** Destello de lanzamiento en la mano del héroe. */
   private cast(f: Fx) {
     if (!f.u) return;
+    // Firma propia de la habilidad (FX['cast@habilidad']), anclada en el objetivo si lo hay.
+    if (f.a && FX['cast@' + f.a]) {
+      const g: Fx = { ...f, n: 'cast@' + f.a };
+      const s = fxStyle(g);
+      if (s) {
+        const k = s.def.k;
+        if (k === 'impact' || k === 'slash' || k === 'bubble') g.u = f.u2 ?? f.u;
+        this.push(s, s.def, this.kit(s, s), g, s.def.d ?? DEFAULT_D[k]);
+      }
+    }
     const look = castLook(f.a);
     const def = CAST_DEF;
     const res: Resolved<FxDef> = { def, c: look.c, c2: look.c2, sh: look.sh, dark: false, auto: false };
@@ -162,6 +184,7 @@ export class VfxEngine {
   update(v: View, dt: number, bounds: Bounds | null) {
     this.clock += dt;
     this.frameNo++;
+    this.burstCount = 0;
     this.b = bounds;
     const fr = this.frame;
     fr.clear();
@@ -317,6 +340,11 @@ export class VfxEngine {
         break;
       }
       case 'beam': {
+        if (def.chan) {
+          // Canalizado (Life Drain…): se corta cuando el lanzador deja de canalizar.
+          const cu = f.u ? v.byId.get(f.u) : undefined;
+          if (!cu || (l.t > 0.3 && cu.c !== 2)) { l.t = l.d; return; }
+        }
         this.hand(v, f.u, f.x, f.y);
         const x1 = this.ax, y1 = this.ay, z1 = this.az;
         this.chest(v, f.u2, f.x2 ?? f.x, f.y2 ?? f.y);
@@ -467,6 +495,8 @@ export class VfxEngine {
         const r = def.r ?? 50;
         if (first) this.burstAt(kit, this.ax, this.ay, this.az, 9 * n, r * 6, Math.max(0.5, r / 60));
         fr.sprite(this.ax, this.ay, this.az, r * 2.6 * (1 - k * 0.4), cr, cg, cb, Math.pow(1 - k, 1.5), SH.GLOW, 0, 1);
+        // Con forma propia (hachas de Wild Axes…): la forma girando encima del brillo.
+        if (def.sh !== undefined) fr.sprite(this.ax, this.ay, this.az, r * 2.2, hr, hg, hb, 1 - k, def.sh, l.t * 25 + l.seed, 0.6);
         break;
       }
       case 'slash': {
@@ -715,7 +745,8 @@ export class VfxEngine {
       }
       case 'aura': {
         fr.decal(DECAL.RING, x, y, ur * 1.55, 0, 0, cr, cg, cb, 0.75, 0.14);
-        fr.decal(DECAL.RUNES, x, y, ur * 1.9, 0, t * 0.8 + ph, cr, cg, cb, 0.4, 0);
+        // Runas solo en héroes: en invocaciones numerosas (soldados de Wukong…) basta el anillo.
+        if (u.k === 'hero' || u.k === 'illusion') fr.decal(DECAL.RUNES, x, y, ur * 1.9, 0, t * 0.8 + ph, cr, cg, cb, 0.4, 0);
         this.emitRate(kit.mote, 5 * n, dt, x, y, ur, ur * 1.5, 60, 160, 0.7, true, z0 + 5);
         break;
       }

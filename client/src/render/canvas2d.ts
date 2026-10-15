@@ -89,7 +89,7 @@ export class Canvas2DRenderer implements Renderer {
     this.effects.fx(f, v);
   }
 
-  setQuality(q: 0 | 1 | 2) { this.quality = q; }
+  setQuality(q: 0 | 1 | 2) { this.quality = q; this.effects.setQuality(q); }
 
   stats() {
     const fx = (this.effects as { stats?: () => Record<string, number> }).stats?.() ?? {};

@@ -8,8 +8,8 @@ import type { Fx } from '../sim/types';
 type WUnit = [number, number, number, number, number, number, number, number, number, number, number, number];
 /** Unidad estática: [id, tipo, nombre, equipo, vidaMáx, manáMáx, radio]. */
 type WStatic = [number, string, string, number, number, number, number];
-/** Proyectil: [id, fx, x, y, origen, objetivo, habilidad]. */
-type WProj = [number, number, number, number, number, number, number];
+/** Proyectil: [id, fx, x, y, origen, objetivo, habilidad, ancho]. */
+type WProj = [number, number, number, number, number, number, number, number];
 /** Zona: [id, fx, x, y, radio, equipo, segundos×10, habilidad]. */
 type WZone = [number, number, number, number, number, number, number, number];
 
@@ -72,7 +72,7 @@ export class WireEncoder {
     }
     const out: WireSnapshot = {
       tm: s.tm, n: s.night ? 1 : 0, u,
-      p: s.p.map((p) => [p.i, this.str(p.fx, str), p.x, p.y, p.s, p.tu ?? -1, this.str(p.a, str)]),
+      p: s.p.map((p) => [p.i, this.str(p.fx, str), p.x, p.y, p.s, p.tu ?? -1, this.str(p.a, str), p.w ?? 0]),
       z: s.z.map((z) => [z.i, this.str(z.fx, str), z.x, z.y, z.r, z.t, Math.round(z.e * 10), this.str(z.a, str)]),
       fx: s.fx, orbs: s.orbs, kills: s.kills, vz: s.vz,
     };
@@ -133,7 +133,7 @@ export class WireDecoder {
       if (ck) x.ck = ck;
       u.push(x);
     }
-    const p: SProj[] = w.p.map((q) => ({ i: q[0], fx: S(q[1]) ?? '', x: q[2], y: q[3], s: q[4], tu: q[5] >= 0 ? q[5] : undefined, a: S(q[6]) }));
+    const p: SProj[] = w.p.map((q) => ({ i: q[0], fx: S(q[1]) ?? '', x: q[2], y: q[3], s: q[4], tu: q[5] >= 0 ? q[5] : undefined, a: S(q[6]), w: q[7] || undefined }));
     const z: SZone[] = w.z.map((q) => ({ i: q[0], fx: S(q[1]) ?? '', x: q[2], y: q[3], r: q[4], t: q[5], e: q[6] / 10, a: S(q[7]) }));
     return {
       tm: w.tm, night: w.n === 1, vz: w.vz, cells: w.cells, u, p, z, fx: w.fx,

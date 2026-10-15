@@ -5,7 +5,7 @@ import { ST } from '../../../shared/sim/types';
 import type { VUnit } from '../game/state';
 import { teamColor, type View } from './types';
 
-interface FloatText { x: number; y: number; text: string; color: string; t: number; dur: number; size: number }
+interface FloatText { x: number; y: number; text: string; color: string; t: number; dur: number; size: number; key?: string; sum?: number; prefix?: string }
 
 const NUM_COLOR: Record<string, string> = {
   magical: '#7fd0ff', pure: '#ffe6a0', physical: '#ffffff', crit: '#ff4040', heal: '#7dff7d',
@@ -23,8 +23,20 @@ export class Overlay {
       const related = f.u === me || f.t === v.team || f.c === 'crit';
       if (!related && f.c !== 'heal') return;
       if (f.c === 'heal' && f.u !== me) return;
-      this.texts.push({ x: f.x, y: f.y, text: (f.c === 'heal' ? '+' : '') + f.v, color: NUM_COLOR[f.c ?? 'physical'] ?? '#fff',
-        t: 0, dur: 1.1, size: f.c === 'crit' ? 22 : 15 });
+      // Como en Dota: los golpes seguidos al mismo objetivo se suman en un único número.
+      const key = `${f.u}|${f.c}`;
+      const prev = this.texts.find((t) => t.key === key && t.t < 0.45);
+      const value = f.v ?? 0;
+      if (prev) {
+        prev.sum = (prev.sum ?? 0) + value;
+        prev.text = (prev.prefix ?? '') + Math.round(prev.sum);
+        prev.x = f.x; prev.y = f.y;
+        prev.size = Math.min(26, prev.size + 0.6);
+        return;
+      }
+      const prefix = f.c === 'heal' ? '+' : '';
+      this.texts.push({ x: f.x, y: f.y, text: prefix + value, color: NUM_COLOR[f.c ?? 'physical'] ?? '#fff',
+        t: 0, dur: 1.1, size: f.c === 'crit' ? 22 : 15, key, sum: value, prefix });
     } else if (f.n === 'gold' || f.n === 'midas') {
       if (f.n === 'gold' && f.u !== me) return;
       this.texts.push({ x: f.x, y: f.y, text: `+${f.v} oro`, color: '#f6cf7c', t: 0, dur: 1.4, size: 15 });
@@ -68,6 +80,7 @@ export class Overlay {
     }
     for (const t of this.texts) {
       t.t += dt;
+      if (t.key && (t.sum ?? 0) < 10 && !t.key.endsWith('crit')) continue;
       const k = t.t / t.dur;
       const p = project(t.x, t.y, 140);
       ctx.globalAlpha = Math.max(0, 1 - k * k);

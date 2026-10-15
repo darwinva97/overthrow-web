@@ -8,9 +8,15 @@ import { BM, DC, DECAL, type Frame, SL, SP } from './frame';
 
 const TAU = Math.PI * 2;
 const SPRITE_PX = 64;
-/** Hoja de sprites tintados: una sola imagen fuente para todos los drawImage (una textura en la GPU). */
-const SHEET_CELLS = 32;
-const CACHE_MAX = SHEET_CELLS * SHEET_CELLS;
+/**
+ * Hojas de sprites tintados de 512 px (8×8 celdas): pocas imágenes fuente para todos los drawImage.
+ * Se usan páginas pequeñas porque al tintar un sprite nuevo el navegador vuelve a subir la hoja entera
+ * a la GPU: con una sola hoja grande (16 MB) cada sprite nuevo costaba un tirón.
+ */
+const PAGE_CELLS = 8;
+const PER_PAGE = PAGE_CELLS * PAGE_CELLS;
+const PAGES = 16;
+const CACHE_MAX = PER_PAGE * PAGES;
 /** Sprites nuevos que se pueden tintar por frame (el resto espera al siguiente). */
 const BAKES_PER_FRAME = 16;
 /** Formas que se notan giradas; el resto se dibuja sin rotar (más barato). */
@@ -19,8 +25,8 @@ const ROTATES = new Set<number>([SH.STAR, SH.SHARD, SH.CROSS, SH.LEAF, SH.SWIRL,
 export class CanvasVfx {
   /** Clave del sprite → índice de celda en la hoja. */
   private cache = new Map<number, number>();
-  private sheet: HTMLCanvasElement;
-  private sheetCtx: CanvasRenderingContext2D;
+  private pages: HTMLCanvasElement[] = [];
+  private pageCtx: CanvasRenderingContext2D[] = [];
   private cellImg: ImageData;
   private colors = new Map<number, string>();
   private bakes = 0;
@@ -30,10 +36,7 @@ export class CanvasVfx {
   readonly K: number;
   constructor(K = 0.35) {
     this.K = K;
-    this.sheet = document.createElement('canvas');
-    this.sheet.width = this.sheet.height = SHEET_CELLS * SPRITE_PX;
-    this.sheetCtx = this.sheet.getContext('2d')!;
-    this.cellImg = this.sheetCtx.createImageData(SPRITE_PX, SPRITE_PX);
+    this.cellImg = new ImageData(SPRITE_PX, SPRITE_PX);
   }
 
   // ------------------------------------------------------------ cachés
@@ -60,14 +63,22 @@ export class CanvasVfx {
       d[o + 2] = (cb + (1 - cb) * w) * 255;
       d[o + 3] = mask[p] * 255;
     }
-    this.sheetCtx.putImageData(this.cellImg, (cell % SHEET_CELLS) * SPRITE_PX, Math.floor(cell / SHEET_CELLS) * SPRITE_PX);
+    const page = Math.floor(cell / PER_PAGE), local = cell % PER_PAGE;
+    if (!this.pages[page]) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = PAGE_CELLS * SPRITE_PX;
+      this.pages[page] = cv;
+      this.pageCtx[page] = cv.getContext('2d')!;
+    }
+    this.pageCtx[page].putImageData(this.cellImg, (local % PAGE_CELLS) * SPRITE_PX, Math.floor(local / PAGE_CELLS) * SPRITE_PX);
     this.cache.set(key, cell);
     return cell;
   }
 
   /** drawImage de una celda de la hoja. */
   private blit(c: CanvasRenderingContext2D, cell: number, x: number, y: number, w: number, h: number) {
-    c.drawImage(this.sheet, (cell % SHEET_CELLS) * SPRITE_PX + 0.5, Math.floor(cell / SHEET_CELLS) * SPRITE_PX + 0.5, SPRITE_PX - 1, SPRITE_PX - 1, x, y, w, h);
+    const local = cell % PER_PAGE;
+    c.drawImage(this.pages[Math.floor(cell / PER_PAGE)], (local % PAGE_CELLS) * SPRITE_PX + 0.5, Math.floor(local / PAGE_CELLS) * SPRITE_PX + 0.5, SPRITE_PX - 1, SPRITE_PX - 1, x, y, w, h);
   }
 
   private masks = new Map<number, [Float32Array, Float32Array]>();

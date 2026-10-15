@@ -9,12 +9,13 @@ import { VfxEngine, type Bounds } from '../vfx/engine';
 import type { Drawn } from './units';
 
 export class EffectPainter {
-  private eng = new VfxEngine({ sprites: 1400, particles: 1000, flyLift: 0, density: 0.45 });
+  private eng = new VfxEngine({ sprites: 1000, particles: 650, flyLift: 0, density: 0.4 });
   private gfx = new CanvasVfx(0.32);
   private lastClock = -1;
   private bounds: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private ms = 0;
   private cur = 0;
+  private acc = { t: 0, n: 0, since: 0 };
 
   private lastView: View | null = null;
 
@@ -52,8 +53,12 @@ export class EffectPainter {
   drawOver(c: CanvasRenderingContext2D, _v: View, _dt: number, px: number) {
     const t0 = performance.now();
     this.gfx.drawAir(c, this.eng.frame, px);
-    this.ms += (this.cur + performance.now() - t0 - this.ms) * 0.1;
+    const a = this.acc, now = performance.now();
+    a.t += this.cur + now - t0; a.n++;
+    if (now - a.since >= 500) { this.ms = a.t / a.n; a.t = 0; a.n = 0; a.since = now; }
   }
+
+  setQuality(q: 0 | 1 | 2) { this.eng.setQuality(q); }
 
   stats(): Record<string, number> {
     const i = this.eng.info;

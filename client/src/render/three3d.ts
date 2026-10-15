@@ -294,6 +294,7 @@ export class Three3DRenderer implements Renderer {
   private fogEvery = 2;
 
   setQuality(q: 0 | 1 | 2) {
+    this.effects.setQuality(q);
     this.gl.shadowMap.enabled = q > 0;
     this.sun.castShadow = q > 0;
     this.sun.shadow.mapSize.set(q === 2 ? 1536 : 1024, q === 2 ? 1536 : 1024);
@@ -305,7 +306,7 @@ export class Three3DRenderer implements Renderer {
 
   stats() {
     const r = this.gl.info.render;
-    return { 'llamadas de dibujo': r.calls, triángulos: r.triangles, geometrías: this.gl.info.memory.geometries, texturas: this.gl.info.memory.textures };
+    return { 'llamadas de dibujo (con sombras)': r.calls, triángulos: r.triangles, geometrías: this.gl.info.memory.geometries, texturas: this.gl.info.memory.textures, ...this.effects.stats() };
   }
 
   fx(f: Fx, v: View) {

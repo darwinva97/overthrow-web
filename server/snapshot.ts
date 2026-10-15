@@ -108,7 +108,7 @@ export function buildTeamSnapshot(w: World, rules: OverthrowRules, team: number,
     night: w.isNight(),
     u: units,
     p: w.projectiles.filter((p) => p.team === team || w.pointVisible(team, p.x, p.y)).map((p) => ({
-      i: p.id, fx: p.fx, x: Math.round(p.x), y: Math.round(p.y), s: p.source.id, tu: p.target?.id, a: p.ability,
+      i: p.id, fx: p.fx, x: Math.round(p.x), y: Math.round(p.y), s: p.source.id, tu: p.target?.id, a: p.ability, w: p.kind === 'linear' ? Math.round(p.width) : undefined,
     })),
     z: w.zones.filter((z) => z.team === team || w.pointVisible(team, z.x, z.y)).map((z) => ({
       i: z.id, fx: z.fx, x: Math.round(z.x), y: Math.round(z.y), r: z.r, t: z.team, e: r1(z.until - w.time), a: z.ability,

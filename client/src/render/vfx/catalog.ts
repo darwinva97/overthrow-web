@@ -68,6 +68,8 @@ export interface FxDef {
   swirl?: boolean;
   /** Efecto al terminar (arc, fall, warn). */
   end?: FxDef;
+  /** Dura lo que dure la canalización del lanzador (cast@habilidad). */
+  chan?: boolean;
 }
 
 export type StatusKind =
@@ -207,7 +209,7 @@ export const FX: Record<string, FxDef> = {
   // Bane, Batrider, Beastmaster, Bloodseeker.
   brain_sap: beam(E('void'), { d: 0.5, w: 12, c: '#7a3cff' }),
   sticky_napalm: burst(E('fire'), { d: 0.5, dark: false, sh: SH.DROP }),
-  wild_axe: spin(E('steel'), { d: 0.4, r: 80 }),
+  wild_axe: impact('#e0c0a0', { d: 0.16, r: 34, n: 0.1, sh: SH.CROSS }),
   blood_rite: pillar(E('blood'), { d: 0.7, h: 500, n: 1.5 }),
   // Brewmaster, Bristleback, Centaur.
   cinder_brew: burst('#e0a040', { d: 0.6, sh: SH.DROP, dark: true }),
@@ -544,6 +546,25 @@ export const FX: Record<string, FxDef> = {
   bramble: field(E('nature'), { sh: SH.LEAF, n: 0.6 }),
   tame_the_beasts: cone(E('earth'), { d: 0.6, w: 35 }),
   trees_cut: NONE,
+  // Firmas al lanzar (evento 'cast') para habilidades cuyo servidor no emite nada propio.
+  'cast@batrider_flaming_lasso': beam(E('fire'), { d: 3, w: 8 }),
+  'cast@pugna_life_drain': beam('#9ae05a', { d: 10, w: 16, chan: true, c2: '#f0ffd0' }),
+  'cast@slardar_amplify_damage': impact(E('water'), { d: 0.6, r: 70, sh: SH.SHARD }),
+  'cast@shadow_shaman_mass_serpent_ward': nova(E('lightning'), { d: 0.6, r: 220, ring: true }),
+  'cast@sven_gods_strength': rise(E('mana'), { d: 1, r: 140, ring: true, n: 1.6 }),
+  'cast@ursa_enrage': rise(E('blood'), { d: 0.9, r: 130, ring: true, n: 1.6 }),
+  'cast@luna_eclipse': nova('#3a4a9a', { d: 1.2, r: 675, ring: true, c2: '#cfe0ff' }),
+  'cast@largo_amphibian_rhapsody': nova('#ff9a5a', { d: 0.8, r: 500, sh: SH.STAR }),
+  'cast@keeper_of_the_light_spirit_form': rise(E('holy'), { d: 1, r: 130, ring: true }),
+  'cast@life_stealer_consume': burst(E('blood'), { d: 0.6, r: 140 }),
+  'cast@visage_summon_familiars': burst(E('spectral'), { d: 0.7, r: 180, sh: SH.SMOKE }),
+  'cast@bristleback_warpath': rise('#e8d8b0', { d: 0.6, r: 100 }),
+  'cast@sniper_assassinate': impact('#ffe066', { d: 1.2, r: 60, sh: SH.CROSS }),
+  'cast@crystal_maiden_freezing_field': nova(E('ice'), { d: 0.8, r: 810, sh: SH.SNOW }),
+  'cast@witch_doctor_death_ward': pillar(E('poison'), { d: 0.7, r: 90, h: 350 }),
+  'cast@juggernaut_omni_slash': slash('#ffd27a', { d: 0.4, r: 160 }),
+  'cast@phantom_lancer_juxtapose': NONE,
+  'cast@riki_backstab': NONE,
   aoe: nova({ d: 0.6, ring: true }),
   'aoe.arcane_curse': nova(E('mana'), { d: 0.7, ring: true, sh: SH.CROSS }),
   barrier: bubble(E('gold'), { d: 0.5 }),

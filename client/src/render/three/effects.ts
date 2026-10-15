@@ -16,6 +16,7 @@ export class EffectLayer {
   private bounds: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private v3 = new THREE.Vector3();
   private ms = 0;
+  private acc = { t: 0, n: 0, since: 0 };
 
   constructor(ctx: ThreeCtx, units: UnitLayer) {
     this.ctx = ctx;
@@ -55,10 +56,19 @@ export class EffectLayer {
     const t0 = performance.now();
     this.eng.update(v, Math.min(dt, 0.25), this.visibleGround());
     this.gpu.sync(this.ctx.clock);
-    this.ms += (performance.now() - t0 - this.ms) * 0.1;
+    this.sample(performance.now() - t0);
+  }
+
+  /** Media de ms por frame en ventanas de medio segundo (como el panel F9). */
+  private sample(ms: number) {
+    const a = this.acc, now = performance.now();
+    a.t += ms; a.n++;
+    if (now - a.since >= 500) { this.ms = a.t / a.n; a.t = 0; a.n = 0; a.since = now; }
   }
 
   /** Estadísticas para el panel F9 (si el núcleo las añade). */
+  setQuality(q: 0 | 1 | 2) { this.eng.setQuality(q); }
+
   stats(): Record<string, number> {
     const i = this.eng.info;
     return { 'llamadas de efectos': this.gpu.calls, partículas: i.particles, 'sprites de efectos': i.sprites, 'efectos vivos': i.live, 'ms de efectos': Math.round(this.ms * 10) / 10 };
