@@ -1,8 +1,4 @@
 import './style.css';
-// Los registros de héroes e items también hacen falta en el cliente (tienda, kits).
-import '../../shared/heroes';
-import '../../shared/items';
-import '../../shared/items/neutral';
 import type { ServerMsg } from '../../shared/net/protocol';
 import { Game } from './game/game';
 import { Net, clearSession, loadSession } from './net';

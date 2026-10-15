@@ -30,6 +30,8 @@ export interface WireSnapshot {
   me?: SMe | null;
 }
 
+/** El marcador es el mismo para todos los jugadores: se serializa una vez por snapshot. */
+const boardStr = new WeakMap<object, string>();
 const F_ATTACK = 1, F_CAST = 2, F_CHANNEL = 4, F_OWN = 8, F_ILL = 16;
 
 /** Una instancia por jugador conectado. */
@@ -77,7 +79,8 @@ export class WireEncoder {
     if (s.cells) out.cells = s.cells;
     if (us.length) out.us = us;
     // Marcador: como mucho una vez por segundo y solo si cambió.
-    const b = JSON.stringify(s.board);
+    let b = boardStr.get(s.board);
+    if (b === undefined) { b = JSON.stringify(s.board); boardStr.set(s.board, b); }
     if (b !== this.lastBoard && s.tm - this.boardAt >= 1) { out.board = s.board; this.lastBoard = b; this.boardAt = s.tm; }
     // "me": lo que cambia de estructura va al momento; los contadores, a 5 Hz.
     const meStr = JSON.stringify(s.me);

@@ -53,6 +53,8 @@ export interface Renderer {
   treesChanged?(changed: [number, number][]): void;
   /** Estadísticas de dibujo del último frame (panel F9). */
   stats?(): Record<string, number>;
+  /** Nivel de calidad 0 (bajo) a 2 (alto): sombras, frecuencia de niebla, detalle. */
+  setQuality?(q: 0 | 1 | 2): void;
   dispose(): void;
 }
 

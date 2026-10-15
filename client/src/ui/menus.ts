@@ -1,15 +1,15 @@
 // Pantalla de inicio y sala de espera.
 import { HEROES, heroPortrait } from '../../../shared/data';
-import { HERO_KITS } from '../../../shared/sim/abilities';
+import meta from '../../../shared/data/meta.json';
 import { MAPS } from '../../../shared/maps';
 import type { LobbyState } from '../../../shared/net/protocol';
-import { TEAM_COLORS, TEAM_NAMES } from '../../../shared/overthrow/rules';
+import { TEAM_COLORS, TEAM_NAMES } from '../../../shared/overthrow/teams';
 import { ATTR_COLOR } from '../render/fxstyle';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const NAME_KEY = 'overthrow.name';
 
-export const playable = () => Object.keys(HERO_KITS).sort((a, b) => HEROES[a].name.localeCompare(HEROES[b].name));
+export const playable = () => [...meta.playable].sort((a, b) => HEROES[a].name.localeCompare(HEROES[b].name));
 
 function modeShape(key: string) {
   const d = MAPS[key];

@@ -9,8 +9,8 @@ import { ST } from '../sim/types';
 import type { OrbPick, Unit, BaseStats } from '../sim/unit';
 import { NEUTRAL, type Rules, type World } from '../sim/world';
 
-export const TEAM_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7', '#f97316', '#06b6d4', '#ec4899'];
-export const TEAM_NAMES = ['Radiantes', 'Carmesí', 'Esmeralda', 'Sol', 'Amatista', 'Ámbar', 'Celeste', 'Rosa'];
+import { TEAM_COLORS, TEAM_NAMES } from './teams';
+export { TEAM_COLORS, TEAM_NAMES };
 
 export const THRONE_RADIUS = 650;
 const THRONE_GOLD = 7, THRONE_XP = 22;

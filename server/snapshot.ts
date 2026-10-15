@@ -92,14 +92,14 @@ function fxVisible(w: World, f: Fx, team: number) {
   return w.pointVisible(team, f.x, f.y);
 }
 
-export function buildSnapshot(w: World, rules: OverthrowRules, team: number, hero: Unit | null, fx: Fx[], boardRows: BoardRow[]): Snapshot {
+/** Parte del snapshot que comparten todos los jugadores de un equipo (sin "me" ni propiedad). */
+export function buildTeamSnapshot(w: World, rules: OverthrowRules, team: number, fx: Fx[], boardRows: BoardRow[]): Snapshot {
   const vis = w.visible.get(team);
   const units: SUnit[] = [];
   for (const u of w.list) {
-    if (!u.alive && u.kind !== 'hero') continue;
     if (!u.alive) continue;
     if (u.team !== team && !vis?.has(u.id)) continue;
-    units.push(encodeUnit(w, u, hero, team));
+    units.push(encodeUnit(w, u, null, team));
   }
   const shown = new Set(units.map((u) => u.i));
   return {
@@ -119,6 +119,19 @@ export function buildSnapshot(w: World, rules: OverthrowRules, team: number, her
     })),
     kills: w.teams.map((t) => t.kills),
     board: boardRows,
-    me: hero ? encodeMe(w, hero) : null,
+    me: null,
   };
+}
+
+/** Completa la parte de equipo para un jugador: sus unidades y su "me". */
+export function forPlayer(w: World, part: Snapshot, hero: Unit | null): Snapshot {
+  if (!hero?.playerId) return part;
+  const pid = hero.playerId;
+  const owned = new Set<number>();
+  for (const u of w.list) if (u.playerId === pid) owned.add(u.id);
+  return { ...part, u: part.u.map((x) => (owned.has(x.i) ? { ...x, o: 1 as const } : x)), me: encodeMe(w, hero) };
+}
+
+export function buildSnapshot(w: World, rules: OverthrowRules, team: number, hero: Unit | null, fx: Fx[], boardRows: BoardRow[]): Snapshot {
+  return forPlayer(w, buildTeamSnapshot(w, rules, team, fx, boardRows), hero);
 }

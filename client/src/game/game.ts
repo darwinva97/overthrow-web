@@ -118,15 +118,38 @@ export class Game {
     for (const el of [...r.elements].reverse()) this.root.prepend(el);
     this.resize();
     r.treesChanged?.(this.changed);
+    r.setQuality?.(this.quality.level);
     this.switching = false;
   }
 
   private resize = () => {
-    this.renderer?.resize(innerWidth, innerHeight, Math.min(2, devicePixelRatio || 1));
+    this.renderer?.resize(innerWidth, innerHeight, Math.min(2, devicePixelRatio || 1) * this.quality.scale);
   };
+
+  // ---------------- Calidad adaptativa ----------------
+  // Mide el tiempo real entre frames: si va lento baja la resolución interna (y en 3D las
+  // sombras); si sobra margen la vuelve a subir. Así un portátil modesto sigue fluido.
+  private quality = { scale: 1, level: 2 as 0 | 1 | 2, slow: 0, fast: 0, ema: 16 };
+
+  private adapt(frameMs: number) {
+    const q = this.quality;
+    q.ema += (Math.min(200, frameMs) - q.ema) * 0.05;
+    if (document.hidden) return;
+    if (q.ema > 24) { q.slow++; q.fast = 0; } else if (q.ema < 14) { q.fast++; q.slow = 0; } else { q.slow = 0; q.fast = 0; }
+    if (q.slow > 90) {
+      q.slow = 0;
+      if (q.level > 0 && q.scale <= 0.8) { q.level = (q.level - 1) as 0 | 1; this.renderer.setQuality?.(q.level); }
+      else if (q.scale > 0.6) { q.scale = Math.max(0.6, q.scale * 0.85); this.resize(); }
+    } else if (q.fast > 300) {
+      q.fast = 0;
+      if (q.scale < 1) { q.scale = Math.min(1, q.scale / 0.85); this.resize(); }
+      else if (q.level < 2) { q.level = (q.level + 1) as 1 | 2; this.renderer.setQuality?.(q.level); }
+    }
+  }
 
   private frame = (now: number) => {
     this.raf = requestAnimationFrame(this.frame);
+    this.adapt(now - this.last);
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const sample = this.buf.sample();
@@ -183,6 +206,7 @@ export class Game {
     this.perfEl.innerHTML = [
       `${p.fps.toFixed(0)} FPS`, `${p.ms.toFixed(1)} ms de render`, `${p.kbps.toFixed(1)} KB/s de red`,
       `${v.units.length} unidades · ${v.projs.length} proyectiles`,
+      `calidad ${['baja', 'media', 'alta'][this.quality.level]} · resolución ×${this.quality.scale.toFixed(2)}`,
       ...Object.entries(extra).map(([k, n]) => `${n} ${k}`),
     ].join('<br>');
   }

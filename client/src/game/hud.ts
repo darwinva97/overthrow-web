@@ -2,7 +2,11 @@
 // se actualizan los valores que cambian.
 import { ABILITIES, HEROES, ITEMS, abilityIcon, heroIcon, heroPortrait, itemIcon, lv, type ItemData } from '../../../shared/data';
 import type { BoardRow, SAbility, SItem, SMe } from '../../../shared/net/protocol';
-import { isShopItem, shopItems } from '../../../shared/sim/items';
+import meta from '../../../shared/data/meta.json';
+
+const SHOP = new Set(meta.shop);
+const isShopItem = (k: string) => SHOP.has(k);
+const shopItems = () => meta.shop.map((k) => ITEMS[k]).filter(Boolean);
 import type { Fx } from '../../../shared/sim/types';
 import { Fog, terrainCanvas } from '../render/terrain';
 import type { Camera, View } from '../render/types';

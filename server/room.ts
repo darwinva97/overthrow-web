@@ -14,7 +14,7 @@ import type { Order } from '../shared/sim/types';
 import type { Unit } from '../shared/sim/unit';
 import { TICK } from '../shared/sim/world';
 import { XP_TABLE } from '../shared/data';
-import { board, buildSnapshot } from './snapshot';
+import { board, buildTeamSnapshot, forPlayer } from './snapshot';
 import { WireEncoder } from '../shared/net/wire';
 
 export interface Player {
@@ -212,10 +212,13 @@ export class Room {
         const p = [...this.players.values()].find((q) => q.unit?.id === r.id);
         if (p) r.name = p.name;
       }
-      // Un snapshot por equipo, reutilizado salvo la parte "me".
+      // Lo que ve cada equipo se calcula una vez; por jugador solo se añade lo suyo.
+      const parts = new Map<number, ReturnType<typeof buildTeamSnapshot>>();
       for (const p of this.players.values()) {
         if (!p.ws || p.ws.readyState !== 1) continue;
-        const s = buildSnapshot(w, g.rules, p.team, p.unit, fx, rows);
+        let part = parts.get(p.team);
+        if (!part) { part = buildTeamSnapshot(w, g.rules, p.team, fx, rows); parts.set(p.team, part); }
+        const s = forPlayer(w, part, p.unit);
         if (p.gridVersion !== w.grid.version) { s.cells = this.changedCells(); p.gridVersion = w.grid.version; }
         p.enc ??= new WireEncoder();
         p.ws.send(JSON.stringify({ t: 'w', s: p.enc.encode(s) }));

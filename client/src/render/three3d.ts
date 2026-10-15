@@ -51,7 +51,7 @@ export class Three3DRenderer implements Renderer {
     this.L = L;
     this.gl = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.gl.shadowMap.enabled = true;
-    this.gl.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.gl.shadowMap.type = THREE.PCFShadowMap;
     this.gl.outputColorSpace = THREE.SRGBColorSpace;
     this.gl.toneMapping = THREE.ACESFilmicToneMapping;
     this.canvas = this.gl.domElement;
@@ -71,7 +71,7 @@ export class Three3DRenderer implements Renderer {
 
     this.scene.add(this.hemi);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(1536, 1536);
     const sc = this.sun.shadow.camera;
     sc.left = -1700; sc.right = 1700; sc.top = 1700; sc.bottom = -1700; sc.near = 100; sc.far = 6000;
     this.sun.shadow.bias = -0.0008;
@@ -256,8 +256,12 @@ export class Three3DRenderer implements Renderer {
     this.sun.target.position.set(cam.x, 0, cam.y);
 
     const eyes = v.units.filter((u) => u.t === v.team && u.v).map((u) => ({ x: u.px, y: u.py, v: u.v!, flying: (u.s & ST.flying) !== 0 }));
-    this.fog.update(eyes, v.night, v.vz);
-    this.fogTex.needsUpdate = true;
+    // La niebla cambia despacio: no hace falta recalcularla y subirla a la GPU en cada frame.
+    this.fogFrame++;
+    if (this.fogFrame % this.fogEvery === 0) {
+      this.fog.update(eyes, v.night, v.vz);
+      this.fogTex.needsUpdate = true;
+    }
 
     this.unitLayer.update(v, dt);
     this.effects.update(v, dt);
@@ -284,6 +288,19 @@ export class Three3DRenderer implements Renderer {
     this.octx.clearRect(0, 0, this.W, this.H);
     this.overlay.draw(this.octx, v, (x, y, h) => this.worldToScreen(x, y, h, cam), dt,
       (u) => (u.k === 'hero' || u.k === 'illusion' ? 230 : u.k === 'creep' ? 140 : 110));
+  }
+
+  private fogFrame = 0;
+  private fogEvery = 2;
+
+  setQuality(q: 0 | 1 | 2) {
+    this.gl.shadowMap.enabled = q > 0;
+    this.sun.castShadow = q > 0;
+    this.sun.shadow.mapSize.set(q === 2 ? 1536 : 1024, q === 2 ? 1536 : 1024);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null as any;
+    this.fogEvery = q === 2 ? 2 : q === 1 ? 3 : 4;
+    this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) m.needsUpdate = true; });
   }
 
   stats() {
