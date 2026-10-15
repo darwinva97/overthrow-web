@@ -37,6 +37,8 @@ export type ServerMsg =
   | { t: 'lobby'; lobby: LobbyState }
   | { t: 'start'; map: string; you: string; team: number; hero: number; teams: TeamInfo[]; killGoal: number; timeLimit: number; captureTime: number }
   | { t: 's'; s: Snapshot }
+  /** Snapshot compacto (shared/net/wire.ts). */
+  | { t: 'w'; s: import('./wire').WireSnapshot }
   | { t: 'err'; msg: string }
   | { t: 'chat'; from: string; text: string; team: number }
   | { t: 'end'; winner: number; reason: string; board: BoardRow[] }

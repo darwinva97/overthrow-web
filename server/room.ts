@@ -15,6 +15,7 @@ import type { Unit } from '../shared/sim/unit';
 import { TICK } from '../shared/sim/world';
 import { XP_TABLE } from '../shared/data';
 import { board, buildSnapshot } from './snapshot';
+import { WireEncoder } from '../shared/net/wire';
 
 export interface Player {
   id: string;
@@ -27,6 +28,7 @@ export interface Player {
   unit: Unit | null;
   lastSeen: number;
   gridVersion?: number;
+  enc?: WireEncoder;
 }
 
 const SNAPSHOT_EVERY = 2; // ticks → 15 Hz
@@ -179,6 +181,7 @@ export class Room {
   sendStart(p: Player) {
     if (!this.game || !p.unit) return;
     p.gridVersion = -1;
+    p.enc = new WireEncoder();
     const d = this.def;
     this.send(p, {
       t: 'start', map: this.map, you: p.id, team: p.team, hero: p.unit.id,
@@ -214,7 +217,8 @@ export class Room {
         if (!p.ws || p.ws.readyState !== 1) continue;
         const s = buildSnapshot(w, g.rules, p.team, p.unit, fx, rows);
         if (p.gridVersion !== w.grid.version) { s.cells = this.changedCells(); p.gridVersion = w.grid.version; }
-        p.ws.send(JSON.stringify({ t: 's', s }));
+        p.enc ??= new WireEncoder();
+        p.ws.send(JSON.stringify({ t: 'w', s: p.enc.encode(s) }));
       }
     }
     if (w.over) this.finish();

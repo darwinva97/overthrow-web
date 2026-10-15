@@ -10,6 +10,7 @@ import { terrainCanvas } from '../render/terrain';
 import type { Camera, Renderer, Targeting, View } from '../render/types';
 import { Hud, IT_KEYS, abilityKeyMap } from './hud';
 import { SnapBuffer, type VUnit } from './state';
+import { WireDecoder } from '../../../shared/net/wire';
 
 type StartMsg = Extract<ServerMsg, { t: 'start' }>;
 type Mode = '2d' | '3d';
@@ -20,6 +21,7 @@ interface Aim extends Targeting { slot: number; item: boolean; attackMove?: bool
 export class Game {
   readonly root = document.createElement('div');
   private buf = new SnapBuffer();
+  private wire = new WireDecoder();
   private layout: MapLayout;
   private renderer!: Renderer;
   private mode: Mode;
@@ -376,10 +378,12 @@ export class Game {
   }
 
   private onMsg(m: ServerMsg) {
-    if (m.t === 's') {
-      this.buf.push(m.s);
-      if (m.s.cells) this.applyCells(m.s.cells);
+    if (m.t === 's' || m.t === 'w') {
+      const s = m.t === 'w' ? this.wire.decode(m.s) : m.s;
+      this.buf.push(s);
+      if (s.cells) this.applyCells(s.cells);
     }
+    else if (m.t === 'start') this.wire.reset();
     else if (m.t === 'err') this.hud.toast(m.msg);
     else if (m.t === 'chat') this.hud.chatLine(m.from, m.text, this.start.teams[m.team]?.color ?? '#ccc');
     else if (m.t === 'end' && !this.ended) {
