@@ -153,7 +153,8 @@ export function abilityLook(a: string | undefined | null): Look {
     const d = ABILITIES[a];
     const hero = heroOfAbility(a);
     const short = hero ? a.slice(hero.length + 1) : a;
-    el = elemOf(short) ?? elemOf(d?.name ?? '') ?? (hero ? HERO_ELEM[hero] ?? null : null) ?? elemOf(d?.desc ?? '');
+    const heroEl: Elem | null = hero && hero in HERO_ELEM ? HERO_ELEM[hero] : null;
+    el = elemOf(short) ?? elemOf(d?.name ?? '') ?? heroEl ?? elemOf(d?.desc ?? '');
     if (!el && d) el = d.targetTeam === 'friendly' || d.targetTeam === 'ally' ? 'heal' : DMG_ELEM[d.dmgType ?? ''] ?? 'magic';
     el ??= 'magic';
   }

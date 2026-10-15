@@ -7,7 +7,7 @@ import { ATTR_COLOR, ORB_COLOR } from '../fxstyle';
 import { img, ready } from '../images';
 
 /** Imagen ya pintada; (x, y) es la esquina superior izquierda relativa a su origen, en unidades de mundo. */
-export interface Sprite { c: HTMLCanvasElement; x: number; y: number; w: number; h: number }
+export interface Sprite { c: HTMLCanvasElement | ImageBitmap; x: number; y: number; w: number; h: number }
 
 const TAU = Math.PI * 2;
 
@@ -49,7 +49,12 @@ export function makeSprite(x0: number, y0: number, w: number, h: number, paint: 
   g.setTransform(sx, 0, 0, sy, -x0 * sx, -y0 * sy);
   g.imageSmoothingQuality = 'high';
   paint(g);
-  return { c, x: x0, y: y0, w, h };
+  const s: Sprite = { c, x: x0, y: y0, w, h };
+  // Como ImageBitmap se copia algo más rápido; mientras llega se usa el canvas.
+  if (typeof createImageBitmap === 'function') {
+    createImageBitmap(c).then((b) => { s.c = b; c.width = c.height = 0; }, () => {});
+  }
+  return s;
 }
 
 /** Dibuja el sprite con su origen en (x, y) del sistema de coordenadas actual. */
@@ -99,6 +104,14 @@ let diskSpr: Sprite | null = null;
 export function whiteDisk(): Sprite {
   return diskSpr ??= makeSprite(-1.05, -1.05, 2.1, 2.1, (g) => {
     g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, 1, 0, TAU); g.fill();
+  }, 64);
+}
+
+let darkSpr: Sprite | null = null;
+/** Disco negro de radio 1 (oscurecer al morir). */
+export function darkDisk(): Sprite {
+  return darkSpr ??= makeSprite(-1.05, -1.05, 2.1, 2.1, (g) => {
+    g.fillStyle = '#0a0608'; g.beginPath(); g.arc(0, 0, 1, 0, TAU); g.fill();
   }, 64);
 }
 
@@ -209,19 +222,33 @@ export interface HeroSprites {
 }
 
 /** Imagen y recorte para la ficha: el retrato grande (centrado) o el icono del minimapa mientras carga. */
+const faces = new Map<string, [HTMLImageElement, HTMLImageElement]>();
+function faceImgs(hero: string) {
+  let f = faces.get(hero);
+  if (!f) { f = [img(heroPortrait(hero)), img(heroIcon(hero))]; faces.set(hero, f); }
+  return f;
+}
 function faceSource(hero: string): { im: HTMLImageElement; sx: number; sy: number; sw: number; sh: number } | null {
-  const p = img(heroPortrait(hero));
+  const p = faceImgs(hero)[0];
   if (ready(p)) {
     const s = p.naturalHeight * 0.96;
     return { im: p, sx: (p.naturalWidth - s) / 2, sy: p.naturalHeight * 0.02, sw: s, sh: s };
   }
-  const i = img(heroIcon(hero));
+  const i = faceImgs(hero)[1];
   if (ready(i)) return { im: i, sx: 0, sy: 0, sw: i.naturalWidth, sh: i.naturalHeight };
   return null;
 }
 
+/** Sombra de contacto horneada (abajo a la derecha). */
+function bakedShadow(g: CanvasRenderingContext2D, r: number) {
+  const gr = g.createRadialGradient(4, 7, r * 0.5, 4, 7, r * 1.12);
+  gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(4, 7, r * 1.12, 0, TAU); g.fill();
+}
+
 function paintToken(g: CanvasRenderingContext2D, hero: string, team: string, own: boolean, tint: string | null) {
   const T = TOKEN;
+  bakedShadow(g, T.edge);
   // Canto exterior y anillo de equipo con bisel.
   g.fillStyle = '#100c12';
   g.beginPath(); g.arc(0, 0, T.edge, 0, TAU); g.fill();
@@ -273,7 +300,7 @@ export function heroSprites(hero: string, team: string, own: boolean): HeroSprit
   if (!s || (s.face < 2 && faceLevel(hero) > s.face)) {
     const R = TOKEN.edge + 1;
     s = {
-      body: makeSprite(-R, -R, R * 2, R * 2, (g) => paintToken(g, hero, team, own, null)),
+      body: makeSprite(-R, -R, R * 2 + 12, R * 2 + 14, (g) => paintToken(g, hero, team, own, null)),
       ill: null,
       face: faceLevel(hero),
     };
@@ -282,10 +309,10 @@ export function heroSprites(hero: string, team: string, own: boolean): HeroSprit
   return s;
 }
 export function illusionSprite(hero: string, team: string, s: HeroSprites): Sprite {
-  if (!s.ill) { const R = TOKEN.edge + 1; s.ill = makeSprite(-R, -R, R * 2, R * 2, (g) => paintToken(g, hero, team, true, 'rgba(70,150,255,0.42)')); }
+  if (!s.ill) { const R = TOKEN.edge + 1; s.ill = makeSprite(-R, -R, R * 2 + 12, R * 2 + 14, (g) => paintToken(g, hero, team, true, 'rgba(70,150,255,0.42)')); }
   return s.ill;
 }
-const faceLevel = (hero: string) => (ready(img(heroPortrait(hero))) ? 2 : ready(img(heroIcon(hero))) ? 1 : 0);
+const faceLevel = (hero: string) => { const f = faceImgs(hero); return ready(f[0]) ? 2 : ready(f[1]) ? 1 : 0; };
 
 /** Arma que señala hacia dónde mira la ficha (local: apunta a +x). */
 export function weaponSprite(melee: boolean, team: string): Sprite {
@@ -293,36 +320,37 @@ export function weaponSprite(melee: boolean, team: string): Sprite {
   let s = weapons.get(key);
   if (s) return s;
   const R = TOKEN.edge;
-  s = makeSprite(R - 9, -13, 36, 26, (g) => {
+  s = makeSprite(R - 9, -16, 42, 32, (g) => {
     g.lineJoin = 'round'; g.lineCap = 'round';
     const dark = '#120e12';
     if (melee) {
       // Espada: hoja de acero, guarda del color del equipo.
-      const x0 = R - 4, x1 = R + 23;
+      const x0 = R - 4, x1 = R + 27;
       const bg = g.createLinearGradient(0, -4, 0, 4);
       bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.5, '#c9ced8'); bg.addColorStop(1, '#7c8494');
       g.fillStyle = bg; g.strokeStyle = dark; g.lineWidth = 1.6;
-      g.beginPath(); g.moveTo(x0, -3.4); g.lineTo(x1 - 6, -3.4); g.lineTo(x1, 0); g.lineTo(x1 - 6, 3.4); g.lineTo(x0, 3.4); g.closePath();
+      g.beginPath(); g.moveTo(x0, -4.2); g.lineTo(x1 - 8, -4.2); g.lineTo(x1, 0); g.lineTo(x1 - 8, 4.2); g.lineTo(x0, 4.2); g.closePath();
       g.fill(); g.stroke();
       g.strokeStyle = 'rgba(80,90,110,0.8)'; g.lineWidth = 0.8;
       g.beginPath(); g.moveTo(x0 + 1, 0); g.lineTo(x1 - 5, 0); g.stroke();
       g.fillStyle = team; g.strokeStyle = dark; g.lineWidth = 1.4;
-      g.beginPath(); g.roundRect(x0 - 3, -9, 4.5, 18, 1.5); g.fill(); g.stroke();
+      g.beginPath(); g.roundRect(x0 - 3, -10.5, 5, 21, 2); g.fill(); g.stroke();
     } else {
       // Arco tensado con flecha: la punta, del color del equipo.
-      g.strokeStyle = dark; g.lineWidth = 4.2;
-      g.beginPath(); g.arc(R - 10, 0, 15, -1.05, 1.05); g.stroke();
-      g.strokeStyle = '#c99a5a'; g.lineWidth = 2.4;
-      g.beginPath(); g.arc(R - 10, 0, 15, -1.05, 1.05); g.stroke();
-      g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 0.7;
-      const ax = R - 10 + Math.cos(1.05) * 15, ay = Math.sin(1.05) * 15;
-      g.beginPath(); g.moveTo(ax, -ay); g.lineTo(R - 4, 0); g.lineTo(ax, ay); g.stroke();
-      g.strokeStyle = dark; g.lineWidth = 3;
-      g.beginPath(); g.moveTo(R - 5, 0); g.lineTo(R + 16, 0); g.stroke();
-      g.strokeStyle = '#e8dcc0'; g.lineWidth = 1.3;
-      g.beginPath(); g.moveTo(R - 5, 0); g.lineTo(R + 16, 0); g.stroke();
-      g.fillStyle = team; g.strokeStyle = dark; g.lineWidth = 1.4;
-      g.beginPath(); g.moveTo(R + 25, 0); g.lineTo(R + 14, -6.5); g.lineTo(R + 16.5, 0); g.lineTo(R + 14, 6.5); g.closePath(); g.fill(); g.stroke();
+      const bx = R - 6, br = 14;
+      g.strokeStyle = dark; g.lineWidth = 5;
+      g.beginPath(); g.arc(bx, 0, br, -1.15, 1.15); g.stroke();
+      g.strokeStyle = '#d8a860'; g.lineWidth = 2.8;
+      g.beginPath(); g.arc(bx, 0, br, -1.15, 1.15); g.stroke();
+      const ax = bx + Math.cos(1.15) * br, ay = Math.sin(1.15) * br;
+      g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 0.8;
+      g.beginPath(); g.moveTo(ax, -ay); g.lineTo(R - 2, 0); g.lineTo(ax, ay); g.stroke();
+      g.strokeStyle = dark; g.lineWidth = 3.4;
+      g.beginPath(); g.moveTo(R - 2, 0); g.lineTo(R + 20, 0); g.stroke();
+      g.strokeStyle = '#efe4c8'; g.lineWidth = 1.6;
+      g.beginPath(); g.moveTo(R - 2, 0); g.lineTo(R + 20, 0); g.stroke();
+      g.fillStyle = team; g.strokeStyle = dark; g.lineWidth = 1.6;
+      g.beginPath(); g.moveTo(R + 31, 0); g.lineTo(R + 17, -8); g.lineTo(R + 20.5, 0); g.lineTo(R + 17, 8); g.closePath(); g.fill(); g.stroke();
     }
   });
   weapons.set(key, s);
@@ -334,17 +362,21 @@ const weapons = cache<string, Sprite>();
 export function slashSprite(): Sprite {
   let s = slashes.get(0);
   if (s) return s;
-  s = makeSprite(-64, -64, 128, 128, (g) => {
-    for (let i = 0; i < 14; i++) {
-      const t = i / 13;
-      const a0 = -1.2 + t * 2.4, a1 = a0 + 2.4 / 13 + 0.02;
-      const w = 4 + 14 * Math.sin(t * Math.PI) ** 0.7;
-      g.strokeStyle = `rgba(255,${Math.round(236 + 19 * t)},${Math.round(200 + 55 * t)},${0.12 + 0.8 * t})`;
-      g.lineWidth = w;
-      g.beginPath(); g.arc(0, 0, 50, a0, a1); g.stroke();
-    }
-    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 1.6;
-    g.beginPath(); g.arc(0, 0, 57, -0.3, 1.2); g.stroke();
+  s = makeSprite(-66, -66, 132, 132, (g) => {
+    const A = 1.25, N = 28;
+    const cg = g.createConicGradient(-A, 0, 0);
+    const span = (2 * A) / TAU;
+    cg.addColorStop(0, 'rgba(255,240,210,0)');
+    cg.addColorStop(span * 0.6, 'rgba(255,248,230,0.55)');
+    cg.addColorStop(span, 'rgba(255,255,255,0.98)');
+    cg.addColorStop(Math.min(1, span + 0.001), 'rgba(255,255,255,0)');
+    g.fillStyle = cg;
+    g.beginPath();
+    for (let i = 0; i <= N; i++) { const t = i / N, a = -A + 2 * A * t, w = 1 + 15 * Math.sin(Math.PI * t ** 0.8) ** 0.8; g.lineTo(Math.cos(a) * (52 + w / 2), Math.sin(a) * (52 + w / 2)); }
+    for (let i = N; i >= 0; i--) { const t = i / N, a = -A + 2 * A * t, w = 1 + 15 * Math.sin(Math.PI * t ** 0.8) ** 0.8; g.lineTo(Math.cos(a) * (52 - w / 2), Math.sin(a) * (52 - w / 2)); }
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 1.4;
+    g.beginPath(); g.arc(0, 0, 59, 0.1, A - 0.05); g.stroke();
   });
   slashes.set(0, s);
   return s;
@@ -352,11 +384,13 @@ export function slashSprite(): Sprite {
 const slashes = cache<number, Sprite>();
 
 const iconCache = cache<string, Sprite>();
+const iconImgs = new Map<string, HTMLImageElement>();
 /** Icono redondo de la habilidad o item que se lanza (null mientras carga). */
 export function castIcon(key: string): Sprite | null {
   const s = iconCache.get(key);
   if (s) return s;
-  const im = img(ITEMS[key] ? itemIcon(key) : abilityIcon(key));
+  let im = iconImgs.get(key);
+  if (!im) { im = img(ITEMS[key] ? itemIcon(key) : abilityIcon(key)); iconImgs.set(key, im); }
   if (!ready(im)) return null;
   const r = 13;
   const sp = makeSprite(-r - 2, -r - 2, r * 2 + 4, r * 2 + 4, (g) => {
@@ -383,7 +417,8 @@ export function baseSprite(r: number, col: string): Sprite {
   const rk = Math.round(r);
   let s = m.get(rk);
   if (!s) {
-    s = makeSprite(-rk - 3, -rk - 3, rk * 2 + 6, rk * 2 + 6, (g) => {
+    s = makeSprite(-rk - 3, -rk - 3, rk * 2 + 12, rk * 2 + 14, (g) => {
+      bakedShadow(g, rk);
       const gr = g.createRadialGradient(0, -rk * 0.3, rk * 0.2, 0, 0, rk);
       gr.addColorStop(0, 'rgba(46,38,34,0.55)'); gr.addColorStop(1, 'rgba(18,14,14,0.78)');
       g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rk, 0, TAU); g.fill();
@@ -459,33 +494,47 @@ const structures = cache<string, Sprite>();
 export function koboldKingSprite(): Sprite {
   let s = structures.get('kobold');
   if (s) return s;
-  s = makeSprite(-56, -56, 112, 112, (g) => {
-    g.lineJoin = 'round';
-    const dark = '#1a120c';
-    // Capa.
-    g.fillStyle = '#6a1a2a'; g.strokeStyle = dark; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(-6, -34); g.quadraticCurveTo(-52, -30, -48, 0); g.quadraticCurveTo(-52, 30, -6, 34); g.closePath(); g.fill(); g.stroke();
-    // Cuerpo y brazos.
-    g.fillStyle = '#8a6440';
-    g.beginPath(); g.ellipse(-6, 0, 24, 30, 0, 0, TAU); g.fill(); g.stroke();
-    g.fillStyle = '#9a7450';
-    g.beginPath(); g.ellipse(8, -26, 9, 7, -0.5, 0, TAU); g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(8, 26, 9, 7, 0.5, 0, TAU); g.fill(); g.stroke();
-    // Cetro.
-    g.strokeStyle = '#c9a050'; g.lineWidth = 3.4; g.beginPath(); g.moveTo(4, 26); g.lineTo(38, 30); g.stroke();
-    g.fillStyle = '#7fe0ff'; dot(g, 40, 30, 4.5);
-    // Cabeza con orejas.
-    g.fillStyle = '#a07a52'; g.strokeStyle = dark; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(6, -12); g.lineTo(-6, -30); g.lineTo(12, -16); g.closePath(); g.fill(); g.stroke();
-    g.beginPath(); g.moveTo(6, 12); g.lineTo(-6, 30); g.lineTo(12, 16); g.closePath(); g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(14, 0, 17, 15, 0, 0, TAU); g.fill(); g.stroke();
-    g.fillStyle = '#c99a6a'; g.beginPath(); g.ellipse(28, 0, 7, 6, 0, 0, TAU); g.fill(); g.stroke();
+  s = makeSprite(-60, -60, 120, 120, (g) => {
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    const dark = '#1a120c', fur = '#86603c', head = '#c4935c';
+    g.strokeStyle = dark; g.lineWidth = 2.2;
+    // Capa corta a la espalda.
+    const cg = g.createLinearGradient(-40, 0, 0, 0);
+    cg.addColorStop(0, '#4a0e1a'); cg.addColorStop(1, '#8a2234');
+    g.fillStyle = cg;
+    g.beginPath(); g.ellipse(-14, 0, 24, 34, 0, Math.PI * 0.5, Math.PI * 1.5); g.closePath(); g.fill(); g.stroke();
+    // Brazos y cetro.
+    g.fillStyle = fur;
+    g.beginPath(); g.ellipse(10, -27, 10, 8, -0.4, 0, TAU); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(10, 27, 10, 8, 0.4, 0, TAU); g.fill(); g.stroke();
+    g.strokeStyle = dark; g.lineWidth = 5.5; g.beginPath(); g.moveTo(6, 30); g.lineTo(44, 34); g.stroke();
+    g.strokeStyle = '#e0b860'; g.lineWidth = 3; g.beginPath(); g.moveTo(6, 30); g.lineTo(44, 34); g.stroke();
+    const og = g.createRadialGradient(44, 33, 0.5, 46, 34, 7);
+    og.addColorStop(0, '#ffffff'); og.addColorStop(0.5, '#7fe0ff'); og.addColorStop(1, '#2a6a9a');
+    g.fillStyle = og; g.strokeStyle = dark; g.lineWidth = 1.6; dot(g, 46, 34, 6.5); g.stroke();
+    // Cuerpo.
+    const bg = g.createRadialGradient(-8, -10, 3, -2, 0, 30);
+    bg.addColorStop(0, '#a87c50'); bg.addColorStop(1, '#5a3c22');
+    g.fillStyle = bg; g.lineWidth = 2.2;
+    g.beginPath(); g.ellipse(-2, 0, 22, 27, 0, 0, TAU); g.fill(); g.stroke();
+    // Orejas largas hacia atrás.
+    g.fillStyle = head;
+    g.beginPath(); g.moveTo(12, -10); g.lineTo(-14, -34); g.lineTo(20, -16); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(12, 10); g.lineTo(-14, 34); g.lineTo(20, 16); g.closePath(); g.fill(); g.stroke();
+    // Cabeza y hocico.
+    const hg = g.createRadialGradient(12, -6, 2, 16, 0, 18);
+    hg.addColorStop(0, '#e0b07a'); hg.addColorStop(1, '#9a6a3a');
+    g.fillStyle = hg; g.beginPath(); g.ellipse(16, 0, 17, 16, 0, 0, TAU); g.fill(); g.stroke();
+    g.fillStyle = '#e8c08a'; g.beginPath(); g.ellipse(32, 0, 8, 7, 0, 0, TAU); g.fill(); g.stroke();
+    g.fillStyle = dark; dot(g, 39, 0, 2.4);
     // Corona.
-    g.fillStyle = '#f6cf7c'; g.strokeStyle = '#6a4416'; g.lineWidth = 1.6;
+    g.fillStyle = '#ffd36a'; g.strokeStyle = '#6a4416'; g.lineWidth = 1.8;
     g.beginPath();
-    for (let k = 0; k < 10; k++) { const a = (k / 10) * TAU, r = k % 2 ? 7 : 13; g.lineTo(12 + Math.cos(a) * r, Math.sin(a) * r); }
+    for (let k = 0; k < 10; k++) { const a = (k / 10) * TAU, r = k % 2 ? 7 : 14; g.lineTo(14 + Math.cos(a) * r, Math.sin(a) * r); }
     g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = '#ff5a4a'; dot(g, 12, 0, 3.2);
+    g.fillStyle = '#fff6d0';
+    for (let k = 0; k < 5; k++) { const a = (k / 5) * TAU; dot(g, 14 + Math.cos(a) * 12, Math.sin(a) * 12, 1.8); }
+    g.fillStyle = '#e0303a'; dot(g, 14, 0, 3.6);
   });
   structures.set('kobold', s);
   return s;

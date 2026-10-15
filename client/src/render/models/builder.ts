@@ -35,6 +35,14 @@ export interface AnimSpec {
 
 export type Strike = 'slash' | 'chop' | 'thrust' | 'bow' | 'gun' | 'cast' | 'punch' | 'dual' | 'bite' | 'claw' | 'whip' | 'none';
 
+/** Pose de reposo de los brazos de un bípedo según su golpe: [brazoD, codoD, brazoI, codoI] (giro en Z). */
+export const IDLE_ARM: Record<Strike, [number, number, number, number]> = {
+  slash: [0.1, 0.35, 0.05, 0.25], chop: [0.15, 0.45, 0.15, 0.45], thrust: [0.1, 0.55, 0.05, 0.4],
+  bow: [0.05, 0.2, 0.35, 0.5], gun: [0.3, 0.6, 0.1, 0.35], cast: [0.05, 0.3, 0.05, 0.3],
+  punch: [0.15, 1.0, 0.15, 1.0], dual: [0.15, 0.5, 0.15, 0.5], claw: [0.2, 0.6, 0.2, 0.6],
+  whip: [0.1, 0.4, 0.05, 0.25], bite: [0.05, 0.25, 0.05, 0.25], none: [0.05, 0.25, 0.05, 0.25],
+};
+
 export interface ModelDef {
   key: string;
   geo: THREE.BufferGeometry;
@@ -68,6 +76,27 @@ export class Builder {
   readonly pal: PaletteRow;
   bones: BoneDef[] = [{ name: 'root', parent: -1, pos: [0, 0, 0] }];
   private parts: THREE.BufferGeometry[] = [];
+  /** Transformación activa: todo lo que se añade (piezas y pivotes) pasa por ella. */
+  private xf: THREE.Matrix4 | null = null;
+  private stack: (THREE.Matrix4 | null)[] = [];
+
+  /** Aplica una transformación a lo que se construya dentro de fn. */
+  within(m: THREE.Matrix4, fn: () => void) {
+    this.stack.push(this.xf);
+    this.xf = this.xf ? this.xf.clone().multiply(m) : m.clone();
+    try { fn(); } finally { this.xf = this.stack.pop() ?? null; }
+  }
+  /** Atajo: traslada (y opcionalmente gira y escala) lo construido dentro de fn. */
+  at(pos: V3, fn: () => void, rot: V3 = [0, 0, 0], scale = 1) {
+    _e.set(rot[0], rot[1], rot[2]);
+    this.within(new THREE.Matrix4().compose(new THREE.Vector3(...pos), new THREE.Quaternion().setFromEuler(_e), new THREE.Vector3(scale, scale, scale)), fn);
+  }
+  /** Punto transformado por la transformación activa. */
+  pt(p: V3): V3 {
+    if (!this.xf) return p;
+    _p.set(p[0], p[1], p[2]).applyMatrix4(this.xf);
+    return [_p.x, _p.y, _p.z];
+  }
 
   constructor(key: string) {
     this.key = key;
@@ -82,6 +111,7 @@ export class Builder {
 
   /** Añade un hueso con pivote absoluto `pos` (pose de reposo sin giros). */
   bone(name: string, parent: string, pos: V3) {
+    pos = this.pt(pos);
     const p = this.idx(parent);
     const existing = this.idx(name);
     if (existing >= 0) { this.bones[existing] = { name, parent: p, pos }; return this; }
@@ -95,6 +125,7 @@ export class Builder {
     if (bi < 0) bi = 0;
     const geo = g.index ? g.toNonIndexed() : g;
     if (geo !== g) g.dispose();
+    if (this.xf) geo.applyMatrix4(this.xf);
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
     if (!geo.attributes.normal) geo.computeVertexNormals();
     const n = geo.attributes.position.count;
@@ -184,10 +215,12 @@ export class Builder {
   }
 
   /** Lámina: polígono 2D (en el plano XY) extruido con grosor `depth` a lo largo de Z. */
-  plate(bone: string, col: string, pts: [number, number][], depth: number, c: V3, o: PartOpts & { scale?: V3 } = {}) {
+  plate(bone: string, col: string, pts: [number, number][], depth: number, c: V3, o: PartOpts & { scale?: V3; plane?: 'xy' | 'zy' } = {}) {
     const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
     const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 2 });
     g.translate(0, 0, -depth / 2);
+    // 'zy': la X del perfil pasa a ser la Z del modelo (láminas que miran hacia delante o atrás).
+    if (o.plane === 'zy') g.rotateY(-Math.PI / 2);
     return this.add(bone, col, this.place(g, c, o.scale ?? [1, 1, 1], o.rot), o.lit);
   }
 

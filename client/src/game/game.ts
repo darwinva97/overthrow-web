@@ -129,12 +129,14 @@ export class Game {
   // ---------------- Calidad adaptativa ----------------
   // Mide el tiempo real entre frames: si va lento baja la resolución interna (y en 3D las
   // sombras); si sobra margen la vuelve a subir. Así un portátil modesto sigue fluido.
-  private quality = { scale: 1, level: 2 as 0 | 1 | 2, slow: 0, fast: 0, ema: 16 };
+  /** localStorage 'overthrow.quality' = 'alta' | 'media' | 'baja' fija la calidad (sin adaptar). */
+  private fixedQuality = ['alta', 'media', 'baja'].includes(localStorage.getItem('overthrow.quality') ?? '');
+  private quality = { scale: 1, level: (({ baja: 0, media: 1 } as Record<string, 0 | 1 | 2>)[localStorage.getItem('overthrow.quality') ?? ''] ?? 2) as 0 | 1 | 2, slow: 0, fast: 0, ema: 16 };
 
   private adapt(frameMs: number) {
     const q = this.quality;
     q.ema += (Math.min(200, frameMs) - q.ema) * 0.05;
-    if (document.hidden) return;
+    if (document.hidden || this.fixedQuality) return;
     if (q.ema > 24) { q.slow++; q.fast = 0; } else if (q.ema < 14) { q.fast++; q.slow = 0; } else { q.slow = 0; q.fast = 0; }
     if (q.slow > 90) {
       q.slow = 0;

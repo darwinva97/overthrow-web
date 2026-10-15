@@ -143,25 +143,41 @@ export class Fog {
     this.x = this.canvas.getContext('2d')!;
   }
 
-  /** Polígono de visión lanzando rayos que se paran en árboles y roca. */
-  private sightPolygon(ex: number, ey: number, r: number): [number, number][] {
+  /**
+   * Polígono de visión lanzando rayos que se paran en árboles y roca, ya en coordenadas
+   * del canvas de niebla. Se guarda por celda, radio y versión del mapa: un ojo quieto o que
+   * se mueve dentro de su celda no vuelve a lanzar rayos.
+   */
+  private polys = new Map<string, Float32Array>();
+  private polyVersion = -1;
+
+  private sightPolygon(ex: number, ey: number, r: number): Float32Array {
     const g = this.grid;
-    const rays = 96, step = 32;
-    const pts: [number, number][] = [];
+    if (this.polyVersion !== g.version || this.polys.size > 600) { this.polys.clear(); this.polyVersion = g.version; }
+    const cx = g.cx(ex), cy = g.cy(ey);
+    const key = `${cx},${cy},${Math.round(r / 25)}`;
+    const hit = this.polys.get(key);
+    if (hit) return hit;
+    // Desde el centro de la celda: el polígono vale para todo el que esté en ella.
+    const ox = g.centerX(cx), oy = g.centerY(cy);
+    const rays = 96, step = 32, s = this.scale;
+    const out = new Float32Array(rays * 2);
     for (let i = 0; i < rays; i++) {
       const a = (i / rays) * Math.PI * 2;
       const dx = Math.cos(a), dy = Math.sin(a);
       let d = 0;
       while (d < r) {
         const nd = d + step;
-        const c = g.cellAt(g.cx(ex + dx * nd), g.cy(ey + dy * nd));
+        const c = g.cellAt(g.cx(ox + dx * nd), g.cy(oy + dy * nd));
         if ((c === TREE || c === ROCK) && nd > 40) { d = nd + 20; break; }
         d = nd;
       }
       d = Math.min(d, r);
-      pts.push([ex + dx * d, ey + dy * d]);
+      out[i * 2] = (ox + dx * d - this.ox) * s;
+      out[i * 2 + 1] = (oy + dy * d - this.ox) * s;
     }
-    return pts;
+    this.polys.set(key, out);
+    return out;
   }
 
   update(eyes: { x: number; y: number; v: number; flying?: boolean }[], night: boolean, extra: { x: number; y: number; r: number }[] = []) {
@@ -172,15 +188,15 @@ export class Fog {
     x.fillRect(0, 0, this.canvas.width, this.canvas.height);
     x.globalCompositeOperation = 'destination-out';
     x.fillStyle = 'rgba(0,0,0,1)';
-    const P = (wx: number, wy: number): [number, number] => [(wx - this.ox) * s, (wy - this.ox) * s];
     for (const e of eyes) {
-      if (e.flying) { const [cx, cy] = P(e.x, e.y); x.beginPath(); x.arc(cx, cy, e.v * s, 0, Math.PI * 2); x.fill(); continue; }
+      if (e.flying) { x.beginPath(); x.arc((e.x - this.ox) * s, (e.y - this.ox) * s, e.v * s, 0, Math.PI * 2); x.fill(); continue; }
       const poly = this.sightPolygon(e.x, e.y, e.v);
       x.beginPath();
-      poly.forEach(([px, py], i) => { const [cx, cy] = P(px, py); if (i) x.lineTo(cx, cy); else x.moveTo(cx, cy); });
+      x.moveTo(poly[0], poly[1]);
+      for (let i = 2; i < poly.length; i += 2) x.lineTo(poly[i], poly[i + 1]);
       x.closePath(); x.fill();
     }
-    for (const v of extra) { const [cx, cy] = P(v.x, v.y); x.beginPath(); x.arc(cx, cy, v.r * s, 0, Math.PI * 2); x.fill(); }
+    for (const v of extra) { x.beginPath(); x.arc((v.x - this.ox) * s, (v.y - this.ox) * s, v.r * s, 0, Math.PI * 2); x.fill(); }
   }
 }
 

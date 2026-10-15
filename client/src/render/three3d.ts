@@ -287,7 +287,7 @@ export class Three3DRenderer implements Renderer {
     this.gl.render(this.scene, this.camera);
     this.octx.clearRect(0, 0, this.W, this.H);
     this.overlay.draw(this.octx, v, (x, y, h) => this.worldToScreen(x, y, h, cam), dt,
-      (u) => (u.k === 'hero' || u.k === 'illusion' ? 230 : u.k === 'creep' ? 140 : 110));
+      (u) => this.unitLayer.headHeight(u) + 40);
   }
 
   private fogFrame = 0;

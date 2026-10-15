@@ -24,6 +24,17 @@ export class SnapBuffer {
   private offset: number | null = null;
   private fxQueue: { tm: number; fx: Fx }[] = [];
   latest: Snapshot | null = null;
+  private pool = new Map<number, VUnit>();
+  private out: VUnit[] = [];
+  private seen = new Set<number>();
+  private indexes = new WeakMap<Snapshot, Map<number, SUnit>>();
+
+  /** Índice id → unidad de un snapshot, calculado una sola vez. */
+  private index(s: Snapshot) {
+    let m = this.indexes.get(s);
+    if (!m) { m = new Map(s.u.map((u) => [u.i, u])); this.indexes.set(s, m); }
+    return m;
+  }
 
   push(s: Snapshot) {
     const now = performance.now() / 1000;
@@ -61,16 +72,29 @@ export class SnapBuffer {
     if (t >= b.tm) a = b;
     const span = b.tm - a.tm;
     const k = span > 0 ? Math.max(0, Math.min(1, (t - a.tm) / span)) : 1;
-    const prev = new Map(a.u.map((u) => [u.i, u]));
-    const units: VUnit[] = b.u.map((u) => {
+    const prev = this.index(a);
+    // Se reutilizan los mismos objetos por id entre frames (menos basura que recoger).
+    const units = this.out;
+    units.length = 0;
+    const seen = this.seen;
+    seen.clear();
+    for (const u of b.u) {
+      let vu = this.pool.get(u.i);
+      if (!vu) { vu = { ...u, px: u.x, py: u.y, pf: u.f, speed: 0 }; this.pool.set(u.i, vu); }
+      else {
+        vu.fx = vu.a = vu.c = vu.ck = vu.o = vu.v = vu.il = undefined;
+        Object.assign(vu, u);
+      }
       const p = prev.get(u.i);
-      if (!p || Math.hypot(p.x - u.x, p.y - u.y) > 600) return { ...u, px: u.x, py: u.y, pf: u.f, speed: 0 };
-      return {
-        ...u,
-        px: p.x + (u.x - p.x) * k, py: p.y + (u.y - p.y) * k, pf: lerpAngle(p.f, u.f, k),
-        speed: span > 0 ? Math.hypot(u.x - p.x, u.y - p.y) / span : 0,
-      };
-    });
+      if (!p || Math.hypot(p.x - u.x, p.y - u.y) > 600) { vu.px = u.x; vu.py = u.y; vu.pf = u.f; vu.speed = 0; }
+      else {
+        vu.px = p.x + (u.x - p.x) * k; vu.py = p.y + (u.y - p.y) * k; vu.pf = lerpAngle(p.f, u.f, k);
+        vu.speed = span > 0 ? Math.hypot(u.x - p.x, u.y - p.y) / span : 0;
+      }
+      units.push(vu);
+      seen.add(u.i);
+    }
+    if (this.pool.size > units.length + 64) for (const id of this.pool.keys()) if (!seen.has(id)) this.pool.delete(id);
     const pp = new Map(a.p.map((p) => [p.i, p]));
     const projs = b.p.map((p) => {
       const q = pp.get(p.i);

@@ -139,7 +139,7 @@ function classify(src: string, at: number): { kind: Kind; debuff: boolean } {
   const head = obj.slice(0, 400);
   if (/addZone\(\s*$/.test(before) || /\binterval:/.test(head) && /\bteam:/.test(head) && /\br[,:]/.test(head) && !/\bname:/.test(head)) return { kind: 'zones', debuff: false };
   if (/\bkind:\s*'(?:track|linear)'/.test(head) || /addProjectile\(\s*$/.test(before)) return { kind: 'projs', debuff: false };
-  return { kind: 'mods', debuff: /\b(?:debuff|stun|slow|root|silence|hex|fear|dot|knockFrom|taunt)\(\s*[^)]*$/.test(before) || /debuff/.test(before) };
+  return { kind: 'mods', debuff: /\bdebuff:\s*true/.test(head) || /\b(?:debuff|stun|slow|root|silence|hex|fear|dot|knockFrom|taunt)\(\s*[^)]*$/.test(before) || /debuff/.test(before) };
 }
 
 for (const [file, src] of sources) {

@@ -112,6 +112,8 @@ export class Hud {
   private mm = h('canvas') as HTMLCanvasElement;
   private mmTerrain: HTMLCanvasElement;
   private mmFog: Fog;
+  private mmW = 0;
+  private mmFrame = 0;
   private shop = h('div', 'shop');
   private shopGrid = h('div', 'grid');
   private shopTab = 'basic';
@@ -293,10 +295,11 @@ export class Hud {
 
   onFx(f: Fx, v: View) {
     if (f.n === 'kill') {
-      const victim = v.byId.get(f.u!), killer = v.byId.get(f.u2!);
+      // La víctima ya no está en el snapshot al morir: su héroe sale del marcador.
+      const heroOf = (id?: number) => v.byId.get(id ?? -1)?.n ?? v.board.find((r) => r.id === id)?.hero;
+      const kn = heroOf(f.u2), vn = heroOf(f.u);
       const row = h('div');
-      const kn = killer?.n;
-      row.innerHTML = `${kn ? `<img src="${heroIcon(kn)}" alt="">` : ''}<span style="color:${this.ctx.teams[f.t!]?.color}">mata a</span>${victim ? `<img src="${heroIcon(victim.n)}" alt="">` : ''}`;
+      row.innerHTML = `${kn ? `<img src="${heroIcon(kn)}" alt="">` : ''}<span style="color:${this.ctx.teams[f.t!]?.color}">mata a</span>${vn ? `<img src="${heroIcon(vn)}" alt="">` : ''}`;
       this.feed.prepend(row);
       setTimeout(() => row.remove(), 7000);
       while (this.feed.children.length > 6) this.feed.lastChild!.remove();
@@ -593,7 +596,9 @@ export class Hud {
   private drawMinimap(v: View, corners: { x: number; y: number }[]) {
     const c = this.mm;
     const dpr = Math.min(2, devicePixelRatio || 1);
-    const W = c.clientWidth || 230;
+    // Leer el tamaño fuerza maquetación: se mide solo de vez en cuando.
+    if (!this.mmW || (this.mmFrame++ % 60) === 0) this.mmW = c.clientWidth || 230;
+    const W = this.mmW;
     if (c.width !== Math.round(W * dpr)) { c.width = c.height = Math.round(W * dpr); }
     const x = c.getContext('2d')!;
     const L = v.layout;
